@@ -1,0 +1,8 @@
+{
+  "name": "Remix LABGUARD AI",
+  "description": "Private Laboratory Intelligence Platform with Sovereign AI governance, explainable operational risk detection, what-if simulations, and auditable data controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
