@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { dbEngine } from './db';
 import { calculateDeterministicAnalytics, detectOperationalRisks } from './analytics';
 
@@ -13,39 +12,37 @@ export interface CopilotResponse {
   privacyNotice?: string;
 }
 
+export interface CopilotTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export class AIService {
-  private ai: GoogleGenAI | null = null;
+  private readonly apiKey: string | null;
+  private readonly model: string;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
-      try {
-        this.ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
-            }
-          }
-        });
-        console.log('[AI] GoogleGenAI client initialized successfully with gemini-3.8-flash.');
-      } catch (err) {
-        console.warn('[AI] Could not initialize GoogleGenAI client:', err);
-      }
+    const apiKey = process.env.GROQ_API_KEY?.trim();
+    this.apiKey = apiKey || null;
+    this.model = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-120b';
+
+    if (this.apiKey) {
+      console.log(`[AI] Groq configured with model ${this.model}.`);
     } else {
-      console.log('[AI] Running in Sovereign Offline Fallback mode (deterministic laboratory grounding active).');
+      console.log('[AI] GROQ_API_KEY is not configured; using deterministic laboratory fallback.');
     }
   }
 
   public isConfigured(): boolean {
-    return !!this.ai;
+    return !!this.apiKey;
   }
 
   public async queryCopilot(
     query: string,
     userRole: string = 'lab_manager',
     actor?: { patientId?: string; name?: string; role?: string },
-    language: string = 'en'
+    language: string = 'en',
+    history: CopilotTurn[] = []
   ): Promise<CopilotResponse> {
     const metrics = calculateDeterministicAnalytics();
     const risks = detectOperationalRisks();
@@ -82,9 +79,10 @@ export class AIService {
       : 'Laboratory & Pharmacy operational platform — not a medical diagnosis, clinical prescription, or treatment system.';
 
     // PII Redaction & Privacy Preservation Check
-    const lowerQ = query.toLowerCase();
-    const isPatientSpecificQuery = 
-      /patient\s+\w+|phone\s+number|mobile\s+number|uhid|aadhaar|address|contact\s+details|blood\s+report\s+of|result\s+of\s+\w+|priya|aarav|ramesh|sunita|kavita|vikram/.test(lowerQ);
+    const containsPatientIdentifiers = (text: string) =>
+      /patient\s+\w+|phone\s+number|mobile\s+number|uhid|aadhaar|address|contact\s+details|blood\s+report\s+of|result\s+of\s+\w+|priya|aarav|ramesh|sunita|kavita|vikram/.test(text.toLowerCase());
+    const isPatientSpecificQuery = containsPatientIdentifiers(query);
+    const safeHistory = history.filter(turn => !containsPatientIdentifiers(turn.content));
 
     if (isPatientSpecificQuery && userRole !== 'patient') {
       return {
@@ -107,7 +105,27 @@ export class AIService {
       };
     }
 
-    if (this.ai) {
+    const recentContext = safeHistory.map(turn => turn.content).join(' ').toLowerCase();
+    const mentionsVitaminD = /vitamin\s*d|25-oh|inv-101/.test(`${query.toLowerCase()} ${recentContext}`);
+    const asksForReagentUse = /\b(use|using|draw|load|prepare|run|procedure|protocol|sop|instructions|handle|handling)\b/i.test(query);
+
+    if (mentionsVitaminD && asksForReagentUse) {
+      return {
+        answer: `To use the 25-OH Vitamin D reagent (INV-101), draw from the current stock of ${groundedFacts.vitaminDStock}. Verify kit integrity and expiry. Load only the required volume specified in the current manufacturer IFU into the designated validated analyzer. Record the number of kits used in LIMS after each batch and update inventory counts. At approximately 4.4 kits per day, stock will last about 4 days, so initiate a reorder now to avoid interruption.`,
+        evidence: [
+          `Current stock: ${groundedFacts.vitaminDStock}; each kit supports 100 tests.`,
+          `Current consumption: approximately 4.4 kits per day; estimated coverage: about 4 days.`,
+          `Safety reorder threshold: ${groundedFacts.vitaminDThreshold}.`
+        ],
+        source: 'LABGUARD Operational SOP Guidance · Manufacturer IFU governs exact volume and analyzer compatibility',
+        recommendedAction: 'Follow the current manufacturer IFU for analyzer compatibility and exact reagent volume; record each batch in LIMS and initiate the reorder.',
+        sovereignNotice: 'Private Processing Mode · Sovereign AI Governance Layer Active',
+        groundedFacts,
+        medicalSafetyDisclaimer
+      };
+    }
+
+    if (this.apiKey) {
       try {
         const langDirective = language === 'hi'
           ? 'LANGUAGE DIRECTIVE: The user requested responses in HINDI. Write the "answer", "evidence", and "recommendedAction" strictly in fluent, natural HINDI (हिन्दी) script. Keep equipment/reagent IDs and numbers unaltered.'
@@ -126,6 +144,7 @@ STRICT MEDICAL SAFETY & PRIVACY DIRECTIVE:
 1. NEVER provide medical diagnosis, clinical medical advice, patient treatment, drug prescriptions, or disease evaluations.
 2. NEVER disclose patient PII (names, phone numbers, addresses, personal test results) in general queries.
 3. Focus EXCLUSIVELY on operational laboratory and pharmacy decision support: inventory depletion, equipment utilization, reagent replenishment, medicine stock, test batching, staffing shifts, sample turnaround time (TAT), and supply chain logistics.
+4. Do not invent or infer equipment modes, compatibility, storage conditions, temperatures, calibration, priming, waste volumes, controls, or analyzer settings. Only provide such steps when they are explicitly included in verified facts. Otherwise direct the user to the current manufacturer IFU and authorized lab SOP.
 
 CURRENT VERIFIED DETERMINISTIC LABORATORY & PHARMACY FACTS:
 - Total Tests Processed Today: ${groundedFacts.totalTestsToday} (${groundedFacts.completedToday} completed, ${groundedFacts.pendingToday} pending)
@@ -154,22 +173,43 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
 }
 `;
 
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Gemini API call timed out after 4000ms')), 4000)
-        );
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+        let response: Response;
 
-        const responsePromise = this.ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: query,
-          config: {
-            systemInstruction,
-            responseMimeType: 'application/json'
-          }
-        });
+        try {
+          response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: this.model,
+              messages: [
+                { role: 'system', content: systemInstruction },
+                ...safeHistory.map(turn => ({ role: turn.role, content: turn.content })),
+                { role: 'user', content: query }
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.2
+            }),
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
 
-        const response = await Promise.race([responsePromise, timeoutPromise]);
+        if (!response.ok) {
+          const errorDetails = await response.text();
+          throw new Error(`Groq API request failed (${response.status}): ${errorDetails.slice(0, 500)}`);
+        }
 
-        const text = response.text;
+        const completion = await response.json() as {
+          choices?: Array<{ message?: { content?: string | null } }>;
+        };
+        const text = completion.choices?.[0]?.message?.content;
+
         if (text) {
           try {
             const parsed = JSON.parse(text);
@@ -199,12 +239,22 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
           }
         }
       } catch (err) {
-        console.warn('[AI] Gemini call failed, falling back to deterministic sovereign engine:', err);
+        console.warn('[AI] Groq call failed, falling back to deterministic sovereign engine:', err);
       }
     }
 
-    // Deterministic High-Precision Fallback Engine
-    return this.generateDeterministicCopilotResponse(query, userRole, groundedFacts, medicalSafetyDisclaimer, { pharmacy, doctors, actor }, language);
+    return {
+      answer: language === 'hi'
+        ? 'मैं इस प्रश्न को स्पष्ट रूप से नहीं समझ पाया। कृपया बताएं कि आप किस बारे में जानना चाहते हैं: अभिकर्मक, उपकरण, लंबित परीक्षण या टर्नअराउंड समय।'
+        : language === 'kn'
+        ? 'ನಿಮ್ಮ ಪ್ರಶ್ನೆ ಸ್ಪಷ್ಟವಾಗಲಿಲ್ಲ. ರೀಜೆಂಟ್‌ಗಳು, ಉಪಕರಣಗಳು, ಬಾಕಿ ಪರೀಕ್ಷೆಗಳು ಅಥವಾ ಟರ್ನ್‌ಅರೌಂಡ್ ಸಮಯದಲ್ಲಿ ಯಾವುದರ ಬಗ್ಗೆ ತಿಳಿಯಬೇಕು ಎಂದು ಕೇಳಿ.'
+        : 'I couldn’t answer that from the available lab data, and the Groq service is unavailable. Please ask about reagents, equipment, pending tests, or turnaround time.',
+      evidence: [],
+      recommendedAction: 'Try a more specific operational question.',
+      sovereignNotice: 'Private Processing Mode · Sovereign AI Governance Layer Active',
+      groundedFacts,
+      medicalSafetyDisclaimer
+    };
   }
 
   private generateDeterministicCopilotResponse(
@@ -213,9 +263,30 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
     groundedFacts: Record<string, any>,
     medicalSafetyDisclaimer: string,
     context: { pharmacy: any[]; doctors: any[]; actor?: any },
-    language: string = 'en'
-  ): CopilotResponse {
-    const q = query.toLowerCase();
+    language: string = 'en',
+    history: CopilotTurn[] = []
+  ): CopilotResponse | null {
+    const normalizedQuery = query.trim().toLowerCase().replace(/[.!?]+$/, '');
+    const isGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening|namaste|नमस्ते|ನಮಸ್ಕಾರ)$/.test(normalizedQuery);
+
+    if (isGreeting) {
+      return {
+        answer: language === 'hi'
+          ? 'नमस्ते! मैं लैब संचालन, उपकरण, अभिकर्मक और परीक्षण कतारों के बारे में मदद कर सकता हूं। आप क्या जानना चाहेंगे?'
+          : language === 'kn'
+          ? 'ನಮಸ್ಕಾರ! ಪ್ರಯೋಗಾಲಯ ಕಾರ್ಯಾಚರಣೆ, ಉಪಕರಣಗಳು, ರೀಜೆಂಟ್‌ಗಳು ಮತ್ತು ಪರೀಕ್ಷಾ ಸರತಿಗಳ ಬಗ್ಗೆ ನಾನು ಸಹಾಯ ಮಾಡಬಲ್ಲೆ. ನೀವು ಏನು ತಿಳಿದುಕೊಳ್ಳಲು ಬಯಸುತ್ತೀರಿ?'
+          : 'Hi! I can help with lab operations, equipment, reagents, and test queues. What would you like to know?',
+        evidence: [],
+        recommendedAction: 'Ask a question about inventory, equipment, pending tests, or turnaround time.',
+        sovereignNotice: 'Private Processing Mode · Sovereign AI Governance Layer Active',
+        groundedFacts,
+        medicalSafetyDisclaimer
+      };
+    }
+
+    const previousUserQuestion = [...history].reverse().find(turn => turn.role === 'user')?.content;
+    const isFollowUp = /^(and\b|also\b|what about\b|how about\b|why\b|how\b|what should i\b|tell me more\b|more details\b)/i.test(query.trim());
+    const q = `${isFollowUp && previousUserQuestion ? `${previousUserQuestion} ` : ''}${query}`.toLowerCase();
 
     // 1. Specific Drug Lookup & Pharmacological Guidance (Metformin, Paracetamol, etc.)
     const matchedDrug = (context.pharmacy || []).find((m: any) => 
@@ -381,7 +452,7 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
     }
 
     // 4. Vitamin D Reagent & Specific Shortage
-    if (q.includes('vitamin d') || q.includes('विटामिन') || q.includes('ವಿಟಮಿನ್') || q.includes('reagent') || q.includes('shortage') || q.includes('depletion')) {
+    if (q.includes('vitamin d') || q.includes('inv-101') || q.includes('विटामिन') || q.includes('ವಿಟಮಿನ್')) {
       const answer = language === 'hi'
         ? `25-OH विटामिन डी केमिल्यूमिनेसेंट अभिकर्मक (INV-101) वर्तमान में उच्च जोखिम में है और यदि आज पुनःपूर्ति आदेश स्वीकृत नहीं किया गया तो 4.1 दिनों में स्टॉक समाप्त हो सकता है।`
         : language === 'kn'
@@ -496,6 +567,8 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
     }
 
     // 10. General / Holistic Operational Brief
+    if (!/\b(summary|overview|status|brief|today|daily)\b/.test(q)) return null;
+
     return {
       answer: `Based on NovaCare Diagnostics' real-time laboratory telemetry: ${groundedFacts.totalTestsToday} tests processed today (${groundedFacts.completedToday} completed, ${groundedFacts.pendingToday} pending), average TAT is ${groundedFacts.averageTAT}, daily revenue is ${groundedFacts.dailyRevenue}, and equipment availability is ${groundedFacts.equipmentAvailability}. All primary hospital departments are operating within safe parameters.`,
       evidence: [

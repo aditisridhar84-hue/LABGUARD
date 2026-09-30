@@ -119,7 +119,12 @@ pip install -r requirements.txt
 
 Create a `.env` file if your application requires environment variables.
 
-Add the required configuration, such as database connection details and API keys, according to your project setup.
+Set the Groq key used by the Copilot. `GROQ_MODEL` is optional and defaults to `openai/gpt-oss-120b`:
+
+```env
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-120b
+```
 
 **Important:** Never commit passwords, API keys, database credentials, or other secrets to GitHub.
 

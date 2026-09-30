@@ -1,12 +1,12 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { dbEngine } from './server/db';
 import { calculateDeterministicAnalytics, detectOperationalRisks, generateRecommendations } from './server/analytics';
 import { externalSyncService } from './server/externalSync';
-import { aiService } from './server/aiService';
+import { aiService, type CopilotTurn } from './server/aiService';
 import { getSystemTraceForEntity } from './server/traceService';
 import {
   patientSchema,
@@ -23,8 +23,6 @@ import {
   billingSchema,
   dataSourceSchema
 } from './server/validation';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1266,8 +1264,15 @@ app.post('/api/copilot', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Query string is required' });
     }
 
+    const history: CopilotTurn[] = Array.isArray(req.body.history)
+      ? req.body.history
+        .filter((turn: any) => turn && (turn.role === 'user' || turn.role === 'assistant') && typeof turn.content === 'string')
+        .slice(-8)
+        .map((turn: any) => ({ role: turn.role, content: turn.content.slice(0, 2000) }))
+      : [];
+
     const actor = getActor(req);
-    const response = await aiService.queryCopilot(query, actor.role, actor, language);
+    const response = await aiService.queryCopilot(query, actor.role, actor, language, history);
 
     dbEngine.logAudit({
       ...actor,
@@ -1538,9 +1543,9 @@ app.get('/api/health', (req: Request, res: Response) => {
         database: { status: 'HEALTHY', provider: 'Persistent Laboratory Engine', path: 'data/laboratory-db.json' },
         authentication: { status: 'HEALTHY', provider: 'Sovereign Role-Based RBAC', activeRole: 'Lab Manager' },
         aiService: {
-          status: 'HEALTHY',
-          provider: aiService.isConfigured() ? 'Gemini 3.8 Flash (Server-Side Proxy)' : 'Sovereign Offline Fallback Engine',
-          model: 'gemini-3.8-flash'
+          status: aiService.isConfigured() ? 'HEALTHY' : 'WARNING',
+          provider: aiService.isConfigured() ? 'Groq (Server-Side Proxy)' : 'Sovereign Offline Fallback Engine',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b'
         },
         externalIntegrations: {
           status: hasErrorSource ? 'WARNING' : 'HEALTHY',
@@ -1623,7 +1628,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[LABGUARD AI] Production Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[LABGUARD AI] Server running on http://localhost:${PORT}`);
   });
 }
 

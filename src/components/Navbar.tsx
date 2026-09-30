@@ -729,7 +729,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
                   <div className="flex items-center gap-2">
                     <Cpu className="w-3.5 h-3.5 text-slate-500" />
                     <div>
-                      <div className="font-semibold text-slate-800">AI Service (Gemini API)</div>
+                      <div className="font-semibold text-slate-800">AI Service (Groq API)</div>
                       <div className="text-[10px] text-slate-500">{systemHealth.components.aiService.provider}</div>
                     </div>
                   </div>
