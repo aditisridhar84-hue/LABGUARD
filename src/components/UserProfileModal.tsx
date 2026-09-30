@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useLabData } from '../context/LabDataContext';
-import { X, User, Mail, Phone, Globe, Shield, CheckCircle2, AlertCircle, Sparkles, Building2 } from 'lucide-react';
+import { X, User, Mail, Phone, Globe, Shield, CheckCircle2, AlertCircle, Building2 } from 'lucide-react';
 
 export const UserProfileModal: React.FC = () => {
-  const { currentUser, profileModalOpen, closeProfileModal, updateProfile, previewRole, switchPreviewRole } = useAuth();
+  const { currentUser, profileModalOpen, closeProfileModal, updateProfile } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const { refreshAllData } = useLabData();
 
@@ -208,46 +208,6 @@ export const UserProfileModal: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            {/* Admin Role Preview Tool */}
-            {currentUser.role === 'administrator' && (
-              <div className="mt-4 p-3 bg-indigo-50/70 rounded-xl border border-indigo-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                    Administrator View Preview (Utility)
-                  </span>
-                  {previewRole && (
-                    <button
-                      type="button"
-                      onClick={() => switchPreviewRole(null)}
-                      className="text-[10px] text-red-600 font-semibold hover:underline"
-                    >
-                      Reset to Chief Administrator
-                    </button>
-                  )}
-                </div>
-                <p className="text-[11px] text-indigo-800 mb-2">
-                  Simulate other hospital staff perspectives without altering your persistent session:
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {(['lab_manager', 'pathologist', 'technician', 'finance', 'pharmacist', 'patient'] as const).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => switchPreviewRole(r)}
-                      className={`px-2 py-1 text-[11px] rounded-lg font-medium border transition-all ${
-                        previewRole === r
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                          : 'bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-100/60'
-                      }`}
-                    >
-                      {r.replace('_', ' ').toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="pt-4 flex justify-end space-x-3">
               <button

@@ -61,6 +61,7 @@ import {
   INITIAL_RECOMMENDATIONS,
   INITIAL_NOTIFICATIONS
 } from '../src/data/mockData';
+import { hashPasswordSync, isHashed, safeEqual, verifyPasswordSync } from './auth/password';
 
 export interface DatabaseSchema {
   users: UserRecord[];
@@ -1391,9 +1392,16 @@ class DatabaseEngine extends EventEmitter {
 
     if (!user) return null;
 
-    // In this production prototype, verify password if user has password set
-    if (user.password && password && user.password !== password) {
-      return null;
+    const storedPassword = user.password;
+    if (!password || !storedPassword) return null;
+
+    const passwordOk = isHashed(storedPassword)
+      ? verifyPasswordSync(password, storedPassword)
+      : safeEqual(password, storedPassword);
+    if (!passwordOk) return null;
+    if (!isHashed(storedPassword)) {
+      user.password = hashPasswordSync(password);
+      this.scheduleSave();
     }
 
     user.lastLogin = new Date().toISOString();

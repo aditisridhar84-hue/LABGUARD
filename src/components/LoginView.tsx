@@ -33,7 +33,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack, is
 
   // Staff Form
   const [staffIdentifier, setStaffIdentifier] = useState('aris.thorne@novacare.org');
-  const [staffPassword, setStaffPassword] = useState('Hospital#2025');
+  const [staffPassword, setStaffPassword] = useState('manager123');
 
   // Patient Form
   const [uhid, setUhid] = useState('PT-1001');
@@ -70,7 +70,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack, is
       closeLoginModal();
     } else {
       // Default: login as demo manager to allow return to main dashboard
-      loginStaff('aris.thorne@novacare.org', 'Hospital#2025');
+      loginStaff('aris.thorne@novacare.org', 'manager123');
     }
   };
 
@@ -147,7 +147,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack, is
 
   const quickStaffSelect = (email: string) => {
     setStaffIdentifier(email);
-    setStaffPassword('Hospital#2025');
+    setStaffPassword('manager123');
     setOtpRequested(false);
     setOtpCode('');
     setErrorMessage('');

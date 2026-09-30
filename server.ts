@@ -8,6 +8,9 @@ import { calculateDeterministicAnalytics, detectOperationalRisks, generateRecomm
 import { externalSyncService } from './server/externalSync';
 import { aiService, type CopilotTurn } from './server/aiService';
 import { getSystemTraceForEntity } from './server/traceService';
+import { attachAuth } from './server/auth/middleware';
+import { registerLabDirectorAuth } from './server/auth/labDirectorRoutes';
+import { apiGuard } from './server/auth/routeGuards';
 import {
   patientSchema,
   testOrderSchema,
@@ -31,9 +34,23 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+app.use(attachAuth);
+app.use('/api', apiGuard);
+registerLabDirectorAuth(app, dbEngine);
 
 // Helper to extract actor from request headers & persistent database
 function getActor(req: Request) {
+  if (req.auth) {
+    return {
+      userId: req.auth.userId,
+      user: req.auth.name,
+      role: req.auth.role,
+      patientId: req.auth.patientId,
+      department: req.auth.department,
+      language: req.auth.language || 'en'
+    };
+  }
+
   const reqUserId = (req.headers['x-user-id'] as string) || '';
   const reqRole = (req.headers['x-user-role'] as string) || '';
   const users = dbEngine.getCollection('users');
@@ -175,6 +192,7 @@ app.post('/api/auth/patient-login', (req: Request, res: Response) => {
 
 app.get('/api/auth/me', (req: Request, res: Response) => {
   try {
+    if (!req.auth) return res.status(401).json({ authenticated: false });
     const actor = getActor(req);
     const users = dbEngine.getCollection('users');
     const user = users.find(u => u.id === actor.userId) || users.find(u => u.role === actor.role);
@@ -202,8 +220,13 @@ app.get('/api/auth/me', (req: Request, res: Response) => {
 app.put('/api/auth/profile', (req: Request, res: Response) => {
   try {
     const actor = getActor(req);
-    const targetUserId = req.body.userId || actor.userId;
-    const updated = dbEngine.updateUserProfile(targetUserId, req.body, actor);
+    const updates = {
+      name: req.body.name,
+      phone: req.body.phone,
+      language: req.body.language,
+      photoUrl: req.body.photoUrl
+    };
+    const updated = dbEngine.updateUserProfile(actor.userId, updates, actor);
 
     if (!updated) {
       return res.status(404).json({ error: 'User not found' });
@@ -906,7 +929,8 @@ app.get('/api/appointments', (req: Request, res: Response) => {
     let apts = dbEngine.getCollection('appointments');
 
     // Strict patient-only isolation
-    if (actor.role === 'patient' && actor.patientId) {
+    if (actor.role === 'patient') {
+      if (!actor.patientId) return res.status(403).json({ error: 'Patient account has no linked record' });
       apts = apts.filter(a => a.patientId === actor.patientId);
     }
 
@@ -919,7 +943,9 @@ app.get('/api/appointments', (req: Request, res: Response) => {
 app.post('/api/appointments', (req: Request, res: Response) => {
   try {
     const actor = getActor(req);
-    const { patientId, patientName, doctorId, doctorName, department, date, time, room, reason } = req.body;
+    const { doctorId, doctorName, department, date, time, room, reason } = req.body;
+    const patientId = actor.role === 'patient' ? req.auth?.patientId : req.body.patientId;
+    const patientName = actor.role === 'patient' ? actor.user : req.body.patientName;
 
     if (!patientId || !doctorId || !date || !time) {
       return res.status(400).json({ error: 'Patient ID, Doctor ID, Date, and Time are required' });
@@ -1154,21 +1180,13 @@ app.get('/api/pharmacy/pharmacists', (req: Request, res: Response) => {
 // ==========================================
 app.get('/api/patient/my-record', (req: Request, res: Response) => {
   try {
-    const actor = getActor(req);
-
-    // Support both patientId and uhid query parameters with fallback
-    const rawTarget = (req.query.patientId as string) || (req.query.uhid as string) || actor.patientId || 'PT-1001';
-    const targetPatientId = rawTarget.trim();
-
-    // Access control: if actor is a patient and has bound patientId, restrict to their UHID
-    if (actor.role === 'patient' && actor.patientId && actor.patientId.toUpperCase() !== targetPatientId.toUpperCase()) {
-      return res.status(403).json({ error: 'Access denied: You may only access your own personal health records.' });
+    if (!req.auth || req.auth.role !== 'patient' || !req.auth.patientId) {
+      return res.status(403).json({ error: 'Patient self-service access required' });
     }
+    const targetPatientId = req.auth.patientId.trim();
 
     const allPatients = dbEngine.getCollection('patients');
-    const patient = allPatients.find(p => p.patientId.toUpperCase() === targetPatientId.toUpperCase()) ||
-                    allPatients.find(p => p.patientId === 'PT-1001') ||
-                    allPatients[0];
+    const patient = allPatients.find(p => p.patientId.toUpperCase() === targetPatientId.toUpperCase());
 
     if (!patient) {
       return res.status(404).json({ error: 'Patient record not found' });

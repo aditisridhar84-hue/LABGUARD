@@ -27,35 +27,6 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Default seed user (Lab Manager) for initial experience
-const DEFAULT_USER: AuthUser = {
-  id: 'USR-02',
-  name: 'Dr. Aris Thorne, MD',
-  email: 'aris.thorne@novacare.org',
-  role: 'lab_manager',
-  department: 'Administration & Pathology',
-  employeeId: 'EMP-1002',
-  phone: '+91 98765 01002',
-  photoUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=256',
-  language: 'en',
-  permissions: ['DASHBOARD_FULL', 'PATIENTS_MANAGE', 'ORDERS_APPROVE', 'INVENTORY_WRITE', 'COPILOT_QUERY']
-};
-
-const DEFAULT_PATIENT: Patient = {
-  patientId: 'PT-1001',
-  name: 'Aarav Sharma',
-  age: 42,
-  gender: 'Male',
-  phone: '+91 98765 43210',
-  email: 'aarav.sharma@gmail.com',
-  registrationDate: '2025-01-10',
-  bloodGroup: 'A+',
-  referringDoctor: 'Dr. Sunita Rao, MD',
-  testsOrderedCount: 4,
-  lastVisit: '2025-02-28',
-  status: 'Active'
-};
-
 const VALID_ROLES: UserRole[] = [
   'administrator',
   'lab_manager',
@@ -67,49 +38,42 @@ const VALID_ROLES: UserRole[] = [
 ];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('labguard_auth_user');
-      return saved ? JSON.parse(saved) : DEFAULT_USER;
-    } catch {
-      return DEFAULT_USER;
-    }
-  });
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
-  const [patientRecord, setPatientRecord] = useState<Patient | null>(() => {
-    try {
-      const saved = localStorage.getItem('labguard_patient_record');
-      return saved ? JSON.parse(saved) : DEFAULT_PATIENT;
-    } catch {
-      return DEFAULT_PATIENT;
-    }
-  });
+  const [patientRecord, setPatientRecord] = useState<Patient | null>(null);
 
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [loginModalOpen, setLoginModalOpen] = useState<boolean>(false);
 
-  // Sync state to storage
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('labguard_auth_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('labguard_auth_user');
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (patientRecord) {
-      localStorage.setItem('labguard_patient_record', JSON.stringify(patientRecord));
-    } else {
-      localStorage.removeItem('labguard_patient_record');
-    }
-  }, [patientRecord]);
+    let active = true;
+    fetch('/api/auth/session', { credentials: 'same-origin' })
+      .then(async (res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!active || !data?.authenticated || !data.user) return;
+        const user = data.user;
+        setCurrentUser({
+          id: user.id || user.userId,
+          name: user.name,
+          email: user.email || '',
+          role: user.role,
+          department: user.department || '',
+          phone: user.phone,
+          patientId: user.patientId,
+          language: user.language || 'en',
+          permissions: Array.isArray(data.permissions) ? data.permissions : [],
+        });
+      })
+      .catch(() => setCurrentUser(null))
+      .finally(() => { if (active) setIsAuthLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   // Derive single authoritative role with fallback
   const effectiveRole: UserRole = useMemo(() => {
-    const candidate = previewRole || currentUser?.role;
+    const candidate = currentUser?.role;
     if (candidate && VALID_ROLES.includes(candidate)) {
       return candidate;
     }
@@ -120,27 +84,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAuthenticated: boolean = currentUser !== null;
 
   const switchRole = (newRole: UserRole) => {
-    const targetRole = VALID_ROLES.includes(newRole) ? newRole : 'lab_manager';
-    setPreviewRole(targetRole);
-
-    if (currentUser) {
-      setCurrentUser(prev => (prev ? { ...prev, role: targetRole } : null));
-    }
-
-    if (targetRole === 'patient' && !patientRecord) {
-      setPatientRecord(DEFAULT_PATIENT);
-    }
+    void newRole;
   };
 
   const switchPreviewRole = (role: UserRole | null) => {
-    if (role && !VALID_ROLES.includes(role)) {
-      setPreviewRole('lab_manager');
-    } else {
-      setPreviewRole(role);
-      if (role && currentUser) {
-        setCurrentUser(prev => (prev ? { ...prev, role } : null));
-      }
-    }
+    void role;
+    setPreviewRole(null);
   };
 
   const loginStaff = async (emailOrEmployeeId: string, password?: string): Promise<{ success: boolean; error?: string }> => {
@@ -183,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setCurrentUser(data.user);
-      setPatientRecord(data.patient || DEFAULT_PATIENT);
+      setPatientRecord(data.patient || null);
       setPreviewRole('patient');
       setLoginModalOpen(false);
       return { success: true };
@@ -226,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setCurrentUser(data.user);
       if (userType === 'patient') {
-        setPatientRecord(data.patient || DEFAULT_PATIENT);
+        setPatientRecord(data.patient || null);
         setPreviewRole('patient');
       } else {
         setPreviewRole(null);
@@ -241,11 +190,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     setCurrentUser(null);
     setPatientRecord(null);
     setPreviewRole(null);
-    localStorage.removeItem('labguard_auth_user');
-    localStorage.removeItem('labguard_patient_record');
     setLoginModalOpen(true);
   };
 

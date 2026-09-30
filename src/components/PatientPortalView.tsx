@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export const PatientPortalView: React.FC = () => {
-  const { currentUser, isAuthLoading, patientRecord, switchRole } = useAuth();
+  const { currentUser, isAuthLoading, patientRecord } = useAuth();
   const { doctors, createAppointment } = useLabData();
   const { t } = useLanguage();
 
@@ -59,25 +59,20 @@ export const PatientPortalView: React.FC = () => {
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
 
   // Authoritative UHID computation
-  const targetUhid = currentUser?.patientId || currentUser?.uhid || patientRecord?.patientId || 'PT-1001';
+  const targetUhid = currentUser?.patientId || currentUser?.uhid || patientRecord?.patientId || '';
   const [currentUhid, setCurrentUhid] = useState(targetUhid);
 
   useEffect(() => {
     setCurrentUhid(targetUhid);
   }, [targetUhid]);
 
-  const fetchMyRecord = async (requestedUhid?: string) => {
-    const queryUhid = requestedUhid || currentUhid || 'PT-1001';
+  const fetchMyRecord = async () => {
+    const queryUhid = currentUhid;
     setLoading(true);
     setErrorState(null);
 
     try {
-      const res = await fetch(`/api/patient/my-record?uhid=${encodeURIComponent(queryUhid)}`, {
-        headers: {
-          'x-user-id': currentUser?.id || 'USR-PT-01',
-          'x-user-role': currentUser?.role || 'patient'
-        }
-      });
+      const res = await fetch('/api/patient/my-record', { credentials: 'same-origin' });
 
       if (res.ok) {
         const data = await res.json();
@@ -134,17 +129,17 @@ export const PatientPortalView: React.FC = () => {
 
   // Safe patient information object with bulletproof fallbacks
   const pInfo: Patient = patientData.patient || patientRecord || {
-    patientId: currentUhid || 'PT-1001',
-    name: currentUser?.name || 'Aarav Sharma',
-    age: 42,
-    gender: 'Male',
-    phone: currentUser?.phone || '+91 98765 43210',
-    email: currentUser?.email || 'aarav.sharma@gmail.com',
-    bloodGroup: 'A+',
-    referringDoctor: 'Dr. Sunita Rao, MD',
-    registrationDate: '2025-01-10',
-    testsOrderedCount: 5,
-    lastVisit: '2025-02-28',
+    patientId: currentUhid,
+    name: currentUser?.name || '',
+    age: 0,
+    gender: 'Other',
+    phone: currentUser?.phone || '',
+    email: currentUser?.email || '',
+    bloodGroup: '',
+    referringDoctor: '',
+    registrationDate: '',
+    testsOrderedCount: 0,
+    lastVisit: '',
     status: 'Active'
   };
 
@@ -203,13 +198,9 @@ export const PatientPortalView: React.FC = () => {
         <p className="text-xs text-slate-600 leading-relaxed">
           You are currently not signed in. Access to patient clinical records and laboratory reports requires an active session.
         </p>
-        <button
-          type="button"
-          onClick={() => switchRole('patient')}
-          className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md transition-all"
-        >
-          Sign In as Patient (Aarav Sharma)
-        </button>
+        <a href="/login/verified-patient" className="inline-flex px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md transition-all">
+          Sign in as verified patient
+        </a>
       </div>
     );
   }
@@ -251,17 +242,6 @@ export const PatientPortalView: React.FC = () => {
             <span>Retry Query</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setCurrentUhid('PT-1001');
-              switchRole('patient');
-              fetchMyRecord('PT-1001');
-            }}
-            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-sm"
-          >
-            Load Sovereign Patient UHID (PT-1001)
-          </button>
         </div>
       </div>
     );

@@ -40,7 +40,7 @@ interface NavItem {
 
 export const Sidebar: React.FC = () => {
   const { activeTab, setActiveTab, risks, inventory, equipment, prescriptions, appointments } = useLabData();
-  const { effectiveRole } = useAuth();
+  const { currentUser, effectiveRole } = useAuth();
   const { t } = useLanguage();
 
   // Computed badges
@@ -50,52 +50,58 @@ export const Sidebar: React.FC = () => {
   const pendingRxCount = prescriptions.filter(p => p.prescriptionStatus === 'ACTIVE').length;
   const todayAptsCount = appointments.filter(a => a.status === 'CONFIRMED' || a.status === 'CHECKED-IN' || (a.status as any) === 'SCHEDULED' || (a.status as any) === 'CHECKED IN').length;
 
-  // Role-filtered navigations
+  const can = (permission: string) => currentUser?.permissions?.includes(permission) === true;
   const isPatient = effectiveRole === 'patient';
-  const isPharmacist = effectiveRole === 'pharmacist';
-  const isTech = effectiveRole === 'technician';
-  const isPathologist = effectiveRole === 'pathologist';
-  const isFinance = effectiveRole === 'finance';
-
-  const coreNav: NavItem[] = isPatient ? [
+  const staffNav: NavItem[] = [
     { id: 'dashboard', label: t('navDashboard'), icon: LayoutDashboard },
-    { id: 'patient-portal', label: t('patientPortal'), icon: User },
+    { id: 'patients', label: t('navPatients'), icon: Users },
+    { id: 'orders', label: t('navOrders'), icon: ClipboardList, badge: 72, badgeColor: 'amber' },
+    { id: 'tests', label: t('navTests'), icon: FlaskConical },
+    { id: 'results', label: t('navResults'), icon: FileCheck2 },
+    { id: 'inventory', label: t('navInventory'), icon: Boxes, badge: lowInventoryCount, badgeColor: 'red' },
+    { id: 'equipment', label: t('navEquipment'), icon: Cpu, badge: maintenanceDueCount, badgeColor: 'amber' },
     { id: 'doctors', label: t('navDoctors'), icon: Stethoscope, badge: todayAptsCount, badgeColor: 'teal' },
-    { id: 'pharmacy', label: t('navPharmacy'), icon: Pill },
-  ] : [
-    { id: 'dashboard', label: t('navDashboard'), icon: LayoutDashboard },
-    ...(!isFinance && !isPharmacist ? [{ id: 'patients', label: t('navPatients'), icon: Users }] : []),
-    ...(!isFinance && !isPharmacist ? [{ id: 'orders', label: t('navOrders'), icon: ClipboardList, badge: 72, badgeColor: 'amber' as const }] : []),
-    ...(!isFinance && !isPharmacist ? [{ id: 'tests', label: t('navTests'), icon: FlaskConical }] : []),
-    ...(!isFinance && !isPharmacist ? [{ id: 'results', label: t('navResults'), icon: FileCheck2 }] : []),
-    ...(!isFinance ? [{ id: 'inventory', label: t('navInventory'), icon: Boxes, badge: lowInventoryCount, badgeColor: 'red' as const }] : []),
-    ...(!isFinance && !isPharmacist ? [{ id: 'equipment', label: t('navEquipment'), icon: Cpu, badge: maintenanceDueCount, badgeColor: 'amber' as const }] : []),
-    { id: 'doctors', label: t('navDoctors'), icon: Stethoscope, badge: todayAptsCount, badgeColor: 'teal' as const },
-    { id: 'pharmacy', label: t('navPharmacy'), icon: Pill, badge: pendingRxCount, badgeColor: 'emerald' as const },
-    ...(!isTech && !isPharmacist ? [{ id: 'staff', label: t('navStaff'), icon: UserCheck }] : []),
-    ...(!isTech ? [{ id: 'suppliers', label: t('navSuppliers'), icon: Building2 }] : []),
-    ...(!isTech && !isPathologist ? [{ id: 'billing', label: t('navBilling'), icon: Receipt }] : []),
+    { id: 'pharmacy', label: t('navPharmacy'), icon: Pill, badge: pendingRxCount, badgeColor: 'emerald' },
+    { id: 'pharmacy-bills', label: 'Pharmacy Bills', icon: Receipt },
+    { id: 'staff', label: t('navStaff'), icon: UserCheck },
+    { id: 'suppliers', label: t('navSuppliers'), icon: Building2 },
+    { id: 'billing', label: t('navBilling'), icon: Receipt },
   ];
+  const navPermission: Record<string, string> = {
+    dashboard: 'dashboard:read', patients: 'patients:read', orders: 'orders:read',
+    results: 'results:read', inventory: 'inventory:read', equipment: 'equipment:read',
+    doctors: 'doctors:read', pharmacy: 'pharmacy:read', staff: 'staff:read',
+    suppliers: 'suppliers:read', billing: 'billing:read',
+  };
+  const coreNav: NavItem[] = isPatient
+    ? [{ id: 'patient-portal', label: 'My Health Record', icon: User }]
+    : staffNav.filter((item) => {
+        if (item.id === 'tests') return effectiveRole === 'administrator' || effectiveRole === 'lab_manager';
+        if (item.id === 'pharmacy-bills') return can('pharmacy:bills');
+        if (item.id === 'pharmacy') return can('pharmacy:read');
+        return can(navPermission[item.id] || '');
+      });
 
   const aiNav: NavItem[] = isPatient ? [] : [
-    ...(!isTech ? [{ id: 'executive-brief', label: t('navExecutiveBrief'), icon: Sparkles }] : []),
-    { id: 'risk-center', label: t('navRiskCenter'), icon: AlertOctagon, badge: criticalRisksCount, badgeColor: 'red' as const },
-    ...(!isTech ? [{ id: 'recommendations', label: t('navRecommendations'), icon: Lightbulb }] : []),
-    ...(!isTech && !isPharmacist ? [{ id: 'what-if', label: t('navSimulator'), icon: SlidersHorizontal }] : []),
+    ...(can('analytics:read') ? [{ id: 'executive-brief', label: t('navExecutiveBrief'), icon: Sparkles }] : []),
+    ...(can('analytics:read') ? [{ id: 'risk-center', label: t('navRiskCenter'), icon: AlertOctagon, badge: criticalRisksCount, badgeColor: 'red' as const }] : []),
+    ...(can('analytics:read') && can('inventory:write') ? [{ id: 'recommendations', label: t('navRecommendations'), icon: Lightbulb }] : []),
+    ...(can('analytics:read') ? [{ id: 'what-if', label: t('navSimulator'), icon: SlidersHorizontal }] : []),
+    ...(can('ai:use') ? [{ id: 'copilot', label: t('navCopilot'), icon: Bot }] : []),
   ];
 
   const sovereignNav: NavItem[] = isPatient ? [] : [
-    ...(!isTech && !isPharmacist && !isFinance ? [{ id: 'integrations', label: t('navIntegrations'), icon: Network }] : []),
-    ...(!isTech && !isPharmacist && !isFinance ? [{ id: 'control-center', label: t('navControlCenter'), icon: ShieldAlert }] : []),
-    ...(!isTech && !isPharmacist && !isFinance ? [{ id: 'private-processing', label: t('navPrivateProcessing'), icon: Binary }] : []),
-    { id: 'audit', label: t('navAudit'), icon: ScrollText },
+    ...(can('integrations:manage') ? [{ id: 'integrations', label: t('navIntegrations'), icon: Network }] : []),
+    ...(can('integrations:manage') ? [{ id: 'control-center', label: t('navControlCenter'), icon: ShieldAlert }] : []),
+    ...(can('integrations:manage') ? [{ id: 'private-processing', label: t('navPrivateProcessing'), icon: Binary }] : []),
+    ...(can('audit:read') ? [{ id: 'audit', label: t('navAudit'), icon: ScrollText }] : []),
   ];
 
-  const governanceNav: NavItem[] = (isPatient || isTech || isPharmacist || isFinance) ? [] : [
+  const governanceNav: NavItem[] = can('integrations:manage') ? [
     { id: 'upload', label: t('navUpload'), icon: UploadCloud },
     { id: 'governance', label: t('navGovernance'), icon: FileLock2 },
     { id: 'impact', label: t('navImpact'), icon: Activity },
-  ];
+  ] : [];
 
   const renderNavGroup = (title: string, items: NavItem[]) => (
     <div className="mb-4">
@@ -180,13 +186,13 @@ export const Sidebar: React.FC = () => {
           <p className="mt-1 text-[10px] text-slate-600 leading-tight">
             Data access strictly restricted to NovaCare private premises.
           </p>
-          <button
+          {can('integrations:manage') && <button
             onClick={() => setActiveTab('control-center')}
             className="mt-2 w-full flex items-center justify-center gap-1 py-1 text-[11px] font-semibold text-teal-800 hover:text-teal-900 bg-teal-50/80 hover:bg-teal-100/80 rounded transition-colors"
           >
             <span>Review Policy Audit</span>
             <ChevronRight className="h-3 w-3" />
-          </button>
+          </button>}
         </div>
       </div>
     </aside>

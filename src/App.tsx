@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Bot, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { LabDataProvider, useLabData } from './context/LabDataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -13,7 +12,7 @@ import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { DemoWalkthroughBar } from './components/DemoWalkthroughBar';
 import { LandingScreen } from './components/LandingScreen';
-import { LoginView } from './components/LoginView';
+import LabDirectorLogin, { LOGIN_ROLES, RoleSelectionLogin } from './pages/login/LabDirectorLogin';
 import { UserProfileModal } from './components/UserProfileModal';
 import { InspectTraceModal } from './components/InspectTraceModal';
 
@@ -32,6 +31,7 @@ import { BillingView } from './components/BillingView';
 // Railway-HMIS Clinical Modules
 import { DoctorAvailabilityView } from './components/DoctorAvailabilityView';
 import { PharmacyView } from './components/PharmacyView';
+import { PharmacyBillsView } from './components/PharmacyView';
 import { PatientPortalView } from './components/PatientPortalView';
 
 // AI Intelligence & Sovereign Views
@@ -56,44 +56,38 @@ const MainLayout: React.FC = () => {
   const { language } = useLanguage();
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
+  useEffect(() => {
+    const initialTab: Record<string, string> = {
+      administrator: 'dashboard',
+      lab_manager: 'dashboard',
+      technician: 'orders',
+      pathologist: 'results',
+      finance: 'billing',
+      pharmacist: 'pharmacy',
+      patient: 'patient-portal',
+    };
+    setActiveTab(initialTab[effectiveRole] || 'dashboard');
+  }, [effectiveRole, setActiveTab]);
+
+  const roleHome: Record<string, string> = {
+    administrator: 'dashboard', lab_manager: 'dashboard', technician: 'orders',
+    pathologist: 'results', finance: 'billing', pharmacist: 'pharmacy', patient: 'patient-portal',
+  };
+  const visibleTab = currentUser && !currentUser.permissions.includes('dashboard:read') && activeTab === 'dashboard'
+    ? roleHome[effectiveRole]
+    : activeTab;
+
   const renderActiveView = () => {
     // If authenticated as patient, default to patient-centric views
     if (effectiveRole === 'patient') {
-      switch (activeTab) {
-        case 'patient-portal':
-          return (
-            <ErrorBoundary sectionName="Patient Health Portal" onResetToSafeView={() => setActiveTab('patient-portal')}>
-              <PatientPortalView />
-            </ErrorBoundary>
-          );
-        case 'doctors':
-          return (
-            <ErrorBoundary sectionName="Doctors & OPD Roster" onResetToSafeView={() => setActiveTab('patient-portal')}>
-              <DoctorAvailabilityView />
-            </ErrorBoundary>
-          );
-        case 'pharmacy':
-          return (
-            <ErrorBoundary sectionName="Hospital Pharmacy" onResetToSafeView={() => setActiveTab('patient-portal')}>
-              <PharmacyView />
-            </ErrorBoundary>
-          );
-        case 'copilot':
-          return (
-            <ErrorBoundary sectionName="Smart Lab Copilot" onResetToSafeView={() => setActiveTab('patient-portal')}>
-              <CopilotView />
-            </ErrorBoundary>
-          );
-        default:
-          return (
-            <ErrorBoundary sectionName="Patient Health Portal" onResetToSafeView={() => setActiveTab('patient-portal')}>
-              <PatientPortalView />
-            </ErrorBoundary>
-          );
-      }
+      return (
+        <ErrorBoundary sectionName="Patient Health Portal" onResetToSafeView={() => setActiveTab('patient-portal')}>
+          <PatientPortalView />
+        </ErrorBoundary>
+      );
     }
 
-    switch (activeTab) {
+    switch (visibleTab) {
       case 'dashboard':
         return (
           <ErrorBoundary sectionName="Dashboard & Operational Overview" onResetToSafeView={() => setActiveTab('dashboard')}>
@@ -110,6 +104,12 @@ const MainLayout: React.FC = () => {
         return (
           <ErrorBoundary sectionName="Hospital Pharmacy & Formulary" onResetToSafeView={() => setActiveTab('dashboard')}>
             <PharmacyView />
+          </ErrorBoundary>
+        );
+      case 'pharmacy-bills':
+        return (
+          <ErrorBoundary sectionName="Pharmacy Bills" onResetToSafeView={() => setActiveTab('billing')}>
+            <PharmacyBillsView />
           </ErrorBoundary>
         );
       case 'patient-portal':
@@ -322,7 +322,7 @@ const AppContent: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <LoginView />;
+    return <RoleSelectionLogin />;
   }
 
   if (showLanding) {
@@ -337,6 +337,13 @@ const AppContent: React.FC = () => {
 };
 
 export default function App() {
+  const pathname = window.location.pathname;
+  const loginPath = pathname.replace(/^\/login\/?/, '');
+  const loginRole = LOGIN_ROLES.find((item) => item.path === loginPath);
+
+  if (pathname === '/login' || pathname === '/login/') return <RoleSelectionLogin />;
+  if (loginRole) return <LabDirectorLogin role={loginRole.role} />;
+
   return (
     <ErrorBoundary sectionName="Hospital Infrastructure Engine">
       <LanguageProvider>

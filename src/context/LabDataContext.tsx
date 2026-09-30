@@ -175,7 +175,7 @@ interface LabDataContextType {
 const LabDataContext = createContext<LabDataContextType | undefined>(undefined);
 
 export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { effectiveRole, switchRole } = useAuth();
+  const { currentUser, effectiveRole, switchRole } = useAuth();
   const activeRole = effectiveRole;
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
@@ -253,28 +253,19 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [demoModeActive, setDemoModeActive] = useState<boolean>(false);
   const [demoStep, setDemoStep] = useState<number>(1);
 
-  // Common request headers with actor role
-  const getAuthHeaders = useCallback(() => {
-    let userId = activeRole === 'lab_manager' ? 'USR-02' : activeRole === 'administrator' ? 'USR-01' : 'USR-03';
-    try {
-      const saved = localStorage.getItem('labguard_auth_user');
-      if (saved) {
-        const u = JSON.parse(saved);
-        if (u.id) userId = u.id;
-      }
-    } catch {}
-
-    return {
-      'Content-Type': 'application/json',
-      'x-user-role': activeRole,
-      'x-user-id': userId
-    };
-  }, [activeRole]);
+  const getAuthHeaders = useCallback(() => ({ 'Content-Type': 'application/json' }), []);
 
   // Refresh all state from REST API
   const refreshAllData = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
+      const hasPermission = (permissions: string | string[]) => {
+        const required = Array.isArray(permissions) ? permissions : [permissions];
+        return required.some((permission) => currentUser?.permissions.includes(permission));
+      };
+      const fetchFor = (permissions: string | string[], url: string) => hasPermission(permissions)
+        ? fetch(url, { headers, credentials: 'same-origin' })
+        : Promise.resolve({ ok: false, status: 403 } as Response);
       const [
         dashRes,
         patientsRes,
@@ -299,28 +290,28 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         delRes,
         pharmRes
       ] = await Promise.allSettled([
-        fetch('/api/dashboard', { headers }),
-        fetch('/api/patients', { headers }),
-        fetch('/api/test-orders', { headers }),
-        fetch('/api/test-results', { headers }),
-        fetch('/api/inventory', { headers }),
-        fetch('/api/equipment', { headers }),
-        fetch('/api/staff', { headers }),
-        fetch('/api/suppliers', { headers }),
-        fetch('/api/billing', { headers }),
-        fetch('/api/audit', { headers }),
-        fetch('/api/notifications', { headers }),
-        fetch('/api/integrations', { headers }),
-        fetch('/api/sync', { headers }),
-        fetch('/api/health', { headers }),
-        fetch('/api/telemetry/mode', { headers }),
-        fetch('/api/doctors', { headers }),
-        fetch('/api/appointments', { headers }),
-        fetch('/api/pharmacy/medicines', { headers }),
-        fetch('/api/pharmacy/prescriptions', { headers }),
-        fetch('/api/pharmacy/bills', { headers }),
-        fetch('/api/pharmacy/deliveries', { headers }),
-        fetch('/api/pharmacy/pharmacists', { headers })
+        fetchFor('dashboard:read', '/api/dashboard'),
+        fetchFor('patients:read', '/api/patients'),
+        fetchFor('orders:read', '/api/test-orders'),
+        fetchFor('results:read', '/api/test-results'),
+        fetchFor('inventory:read', '/api/inventory'),
+        fetchFor('equipment:read', '/api/equipment'),
+        fetchFor('staff:read', '/api/staff'),
+        fetchFor('suppliers:read', '/api/suppliers'),
+        fetchFor('billing:read', '/api/billing'),
+        fetchFor('audit:read', '/api/audit'),
+        currentUser && currentUser.role !== 'patient' ? fetch('/api/notifications', { headers }) : Promise.resolve({ ok: false, status: 403 } as Response),
+        fetchFor('integrations:manage', '/api/integrations'),
+        fetchFor('integrations:manage', '/api/sync'),
+        fetchFor('dashboard:read', '/api/health'),
+        fetchFor('integrations:manage', '/api/telemetry/mode'),
+        fetchFor('doctors:read', '/api/doctors'),
+        fetchFor(['appointments:read', 'appointments:self'], '/api/appointments'),
+        fetchFor('pharmacy:read', '/api/pharmacy/medicines'),
+        fetchFor('pharmacy:read', '/api/pharmacy/prescriptions'),
+        fetchFor(['pharmacy:bills', 'pharmacy:read'], '/api/pharmacy/bills'),
+        fetchFor('pharmacy:read', '/api/pharmacy/deliveries'),
+        fetchFor('pharmacy:read', '/api/pharmacy/pharmacists')
       ]);
 
       if (dashRes.status === 'fulfilled' && dashRes.value.ok) {
@@ -440,7 +431,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.warn('[LabData] API sync fallback to local store:', err);
       setEnvironmentStatus('OFFLINE');
     }
-  }, []);
+  }, [currentUser, getAuthHeaders]);
 
   // Initial load
   useEffect(() => {
@@ -449,6 +440,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Connect to Real-time SSE Telemetry Stream
   useEffect(() => {
+    if (!currentUser?.permissions.includes('dashboard:read')) return;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
 
@@ -519,7 +511,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [telemetryMode, environmentStatus]);
+  }, [telemetryMode, environmentStatus, currentUser?.role]);
 
   // Mode switcher
   const setTelemetryMode = async (mode: 'LIVE' | 'DEMO') => {

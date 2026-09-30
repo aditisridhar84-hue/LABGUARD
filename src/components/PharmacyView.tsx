@@ -5,6 +5,39 @@ import { useLanguage } from '../context/LanguageContext';
 import { PharmacyDrugRecord, PrescriptionRecord, PharmacyDeliveryRecord } from '../types';
 import { Pill, Plus, Search, ShoppingBag, Truck, CheckCircle2, AlertTriangle, ArrowRight, RefreshCw, FileText, DollarSign, PackageCheck, Thermometer } from 'lucide-react';
 
+export const PharmacyBillsView: React.FC = () => {
+  const { pharmacyBills } = useLabData();
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Pharmacy Bills</h1>
+        <p className="mt-1 text-sm text-slate-500">Pharmacy transactions and payment status</p>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <tr><th className="px-4 py-3">Bill</th><th className="px-4 py-3">Patient</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Items</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Payment</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {pharmacyBills.map((bill) => (
+              <tr key={bill.id}>
+                <td className="px-4 py-3 font-medium text-slate-900">{bill.billNumber}</td>
+                <td className="px-4 py-3">{bill.patientName}</td>
+                <td className="px-4 py-3">{bill.date}</td>
+                <td className="px-4 py-3">{bill.items.length}</td>
+                <td className="px-4 py-3">₹{bill.total.toLocaleString('en-IN')}</td>
+                <td className="px-4 py-3">{bill.paymentStatus}</td>
+              </tr>
+            ))}
+            {pharmacyBills.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No pharmacy bills found.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
+
 export const PharmacyView: React.FC = () => {
   const {
     pharmacyMedicines,

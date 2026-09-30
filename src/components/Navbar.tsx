@@ -53,8 +53,6 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = () => {
   const { 
-    activeRole, 
-    setActiveRole, 
     unreadAlertsCount, 
     notifications, 
     markNotificationRead,
@@ -79,11 +77,11 @@ export const Navbar: React.FC<NavbarProps> = () => {
     staff
   } = useLabData();
 
-  const { currentUser, effectiveRole, openProfileModal, logout, previewRole, switchRole, switchPreviewRole } = useAuth();
+  const { currentUser, effectiveRole, openProfileModal, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
+  const can = (permission: string) => currentUser?.permissions?.includes(permission) === true;
 
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showHealthDropdown, setShowHealthDropdown] = useState(false);
   const [showEnvDropdown, setShowEnvDropdown] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -158,11 +156,11 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
     const list: SearchResultItem[] = [];
     const isPatientRole = effectiveRole === 'patient';
-    const boundPatientId = (currentUser?.patientId || currentUser?.uhid || 'PT-1001').toLowerCase();
+    const boundPatientId = (currentUser?.patientId || currentUser?.uhid || '').toLowerCase();
 
     // 1. Patients
     patients.forEach(p => {
-      if (isPatientRole && p.patientId.toLowerCase() !== boundPatientId) return;
+      if (isPatientRole && (!boundPatientId || p.patientId.toLowerCase() !== boundPatientId)) return;
       if (
         p.name.toLowerCase().includes(q) ||
         p.patientId.toLowerCase().includes(q) ||
@@ -183,7 +181,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
     // 2. Test Orders
     orders.forEach(o => {
-      if (isPatientRole && o.patientId.toLowerCase() !== boundPatientId) return;
+      if (isPatientRole && (!boundPatientId || o.patientId.toLowerCase() !== boundPatientId)) return;
       if (
         o.orderId.toLowerCase().includes(q) ||
         o.patientName.toLowerCase().includes(q) ||
@@ -204,7 +202,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
     });
 
     // 3. Inventory (Restricted for patient)
-    if (!isPatientRole) {
+    if (can('inventory:read')) {
       inventory.forEach(i => {
         if (
           i.itemName.toLowerCase().includes(q) ||
@@ -226,7 +224,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
     }
 
     // 4. Equipment (Restricted for patient)
-    if (!isPatientRole) {
+    if (can('equipment:read')) {
       equipment.forEach(e => {
         if (
           e.name.toLowerCase().includes(q) ||
@@ -248,7 +246,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
     }
 
     // 5. Doctors
-    doctors.forEach(d => {
+    if (can('doctors:read')) doctors.forEach(d => {
       const room = d.roomNumber || d.consultationRoom || '';
       if (
         d.name.toLowerCase().includes(q) ||
@@ -269,7 +267,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
     });
 
     // 6. Pharmacy Drugs
-    pharmacyMedicines.forEach(m => {
+    if (can('pharmacy:read')) pharmacyMedicines.forEach(m => {
       const statusLabel = m.stockStatus || m.status;
       if (
         m.drugName.toLowerCase().includes(q) ||
@@ -291,7 +289,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
     // 7. Invoices / Billing
     billing.forEach(b => {
-      if (isPatientRole && b.patientId.toLowerCase() !== boundPatientId) return;
+      if (isPatientRole || !can('billing:read')) return;
       if (
         b.invoiceId.toLowerCase().includes(q) ||
         b.patientName.toLowerCase().includes(q) ||
@@ -312,7 +310,8 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
     // 8. Appointments
     appointments.forEach(a => {
-      if (isPatientRole && a.patientId.toLowerCase() !== boundPatientId) return;
+      if (isPatientRole && (!boundPatientId || a.patientId.toLowerCase() !== boundPatientId)) return;
+      if (!isPatientRole && !can('appointments:read')) return;
       if (
         a.appointmentId.toLowerCase().includes(q) ||
         a.patientName.toLowerCase().includes(q) ||
@@ -335,7 +334,8 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
     // 9. Prescriptions
     prescriptions.forEach(p => {
-      if (isPatientRole && p.patientId.toLowerCase() !== boundPatientId) return;
+      if (isPatientRole && (!boundPatientId || p.patientId.toLowerCase() !== boundPatientId)) return;
+      if (!isPatientRole && !can('pharmacy:read')) return;
       const medsStr = (p.medicines || []).map(m => m.drugName).join(' ').toLowerCase();
       const docName = p.doctorName || p.prescribingDoctor || '';
       if (
@@ -358,7 +358,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
     });
 
     // 10. Staff Directory (Authorized for Admin & Lab Manager only)
-    if (!isPatientRole && (effectiveRole === 'administrator' || effectiveRole === 'lab_manager')) {
+    if (can('staff:read')) {
       staff.forEach(s => {
         if (
           s.name.toLowerCase().includes(q) ||
@@ -378,7 +378,20 @@ export const Navbar: React.FC<NavbarProps> = () => {
       });
     }
 
-    return list.slice(0, 16);
+    return list.filter((item) => {
+      switch (item.category) {
+        case 'Patients': return isPatientRole ? can('patients:self') : can('patients:read');
+        case 'Test Orders': return isPatientRole ? can('patients:self') : can('orders:read');
+        case 'Invoices': return can('billing:read');
+        case 'Appointments': return isPatientRole ? can('appointments:self') : can('appointments:read');
+        case 'Prescriptions': return isPatientRole ? can('patients:self') : can('pharmacy:read');
+        case 'Doctors': return can('doctors:read');
+        case 'Pharmacy Drugs': return can('pharmacy:read');
+        case 'Staff': return can('staff:read');
+        case 'Inventory': return can('inventory:read');
+        case 'Equipment': return can('equipment:read');
+      }
+    }).slice(0, 16);
   }, [searchQuery, effectiveRole, currentUser, patients, orders, inventory, equipment, doctors, pharmacyMedicines, billing, appointments, prescriptions, staff]);
 
   const handleSelectResult = (item: SearchResultItem) => {
@@ -447,7 +460,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
               </span>
               
               {/* Environment Indicator Dropdown */}
-              <div className="relative">
+              <div className="relative" hidden={!can('integrations:manage')}>
                 <button
                   onClick={() => setShowEnvDropdown(!showEnvDropdown)}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wider transition-all uppercase cursor-pointer hover:shadow-xs ${getEnvBadgeStyles()}`}
@@ -671,7 +684,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
       {/* Zone 3: Actions, Health, RBAC & Profile */}
       <div className="flex items-center gap-3">
         {/* System Health Indicator & Popover */}
-        <div className="relative">
+        <div className="relative" hidden={!can('dashboard:read')}>
           <button
             onClick={() => setShowHealthDropdown(!showHealthDropdown)}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
@@ -787,6 +800,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
         {/* Hackathon Demo Mode Launcher Button */}
         <button
+          hidden={!can('dashboard:read')}
           onClick={startDemoMode}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all shadow-xs ${
             demoModeActive
@@ -830,64 +844,13 @@ export const Navbar: React.FC<NavbarProps> = () => {
           </button>
         </div>
 
-        {/* Role-Based Access Control Selector / Instant Single Source of Truth */}
-        <div className="relative">
-          <button
-            onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-            className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              previewRole
-                ? 'bg-amber-50 border-amber-300 text-amber-900'
-                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            <span className="text-slate-500">{t('roleLabel')}:</span>
-            <span className="font-semibold text-slate-900">{currentRoleObj.label}</span>
-            {previewRole && (
-              <span className="text-[9px] bg-amber-200 text-amber-900 px-1 py-0.2 rounded font-mono">
-                PREVIEW
-              </span>
-            )}
-            <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-          </button>
-
-          {showRoleDropdown && (
-            <div className="absolute right-0 mt-1.5 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg z-50">
-              <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex justify-between items-center">
-                <span>Active Role Preview</span>
-                {previewRole && (
-                  <button
-                    onClick={() => {
-                      switchPreviewRole(null);
-                      setShowRoleDropdown(false);
-                    }}
-                    className="text-[10px] text-red-600 font-bold hover:underline"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-              {roles.map(r => (
-                <button
-                  key={r.id}
-                  onClick={() => {
-                    switchRole(r.id);
-                    setActiveRole(r.id);
-                    setShowRoleDropdown(false);
-                  }}
-                  className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors flex flex-col ${
-                    effectiveRole === r.id ? 'bg-teal-50 text-teal-900' : 'hover:bg-slate-50 text-slate-700'
-                  }`}
-                >
-                  <span className="font-medium">{r.label}</span>
-                  <span className="text-[11px] text-slate-500">{r.desc}</span>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700" aria-label="Signed-in role">
+          <span className="text-slate-500">{t('roleLabel')}:</span>{' '}
+          <span className="font-semibold text-slate-900">{currentRoleObj.label}</span>
         </div>
 
         {/* Notifications Center */}
-        <div className="relative">
+        <div className="relative" hidden={effectiveRole === 'patient'}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
