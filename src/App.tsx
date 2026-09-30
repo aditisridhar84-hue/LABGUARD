@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { Bot, X } from 'lucide-react';
 import { LabDataProvider, useLabData } from './context/LabDataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -53,6 +54,7 @@ const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab } = useLabData();
   const { currentUser, effectiveRole } = useAuth();
   const { language } = useLanguage();
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   const renderActiveView = () => {
     // If authenticated as patient, default to patient-centric views
@@ -272,6 +274,32 @@ const MainLayout: React.FC = () => {
       {/* Persistent Global Modals */}
       <UserProfileModal />
       <InspectTraceModal />
+
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+        <section
+          id="copilot-widget-panel"
+          role="dialog"
+          aria-label="LABGUARD Copilot"
+          aria-hidden={!isCopilotOpen}
+          hidden={!isCopilotOpen}
+          className="h-[min(44rem,calc(100dvh-6.5rem))] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-teal-200 bg-white shadow-[0_24px_60px_-20px_rgba(15,118,110,0.4)]"
+        >
+          <ErrorBoundary sectionName="Smart Lab Copilot">
+            <CopilotView compact onClose={() => setIsCopilotOpen(false)} />
+          </ErrorBoundary>
+        </section>
+        <button
+          type="button"
+          onClick={() => setIsCopilotOpen(open => !open)}
+          aria-label={isCopilotOpen ? 'Close LABGUARD Copilot' : 'Open LABGUARD Copilot'}
+          aria-expanded={isCopilotOpen}
+          aria-controls="copilot-widget-panel"
+          title={isCopilotOpen ? 'Close Copilot' : 'Open Copilot'}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-white shadow-lg transition-colors hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+        >
+          {isCopilotOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
+        </button>
+      </div>
     </div>
   );
 };

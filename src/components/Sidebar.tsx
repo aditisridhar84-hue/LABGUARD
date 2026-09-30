@@ -14,7 +14,6 @@ import {
   AlertOctagon,
   Lightbulb,
   SlidersHorizontal,
-  Bot,
   ShieldAlert,
   Binary,
   ScrollText,
@@ -78,14 +77,11 @@ export const Sidebar: React.FC = () => {
     ...(!isTech && !isPathologist ? [{ id: 'billing', label: t('navBilling'), icon: Receipt }] : []),
   ];
 
-  const aiNav: NavItem[] = isPatient ? [
-    { id: 'copilot', label: t('navCopilot'), icon: Bot }
-  ] : [
+  const aiNav: NavItem[] = isPatient ? [] : [
     ...(!isTech ? [{ id: 'executive-brief', label: t('navExecutiveBrief'), icon: Sparkles }] : []),
     { id: 'risk-center', label: t('navRiskCenter'), icon: AlertOctagon, badge: criticalRisksCount, badgeColor: 'red' as const },
     ...(!isTech ? [{ id: 'recommendations', label: t('navRecommendations'), icon: Lightbulb }] : []),
     ...(!isTech && !isPharmacist ? [{ id: 'what-if', label: t('navSimulator'), icon: SlidersHorizontal }] : []),
-    { id: 'copilot', label: t('navCopilot'), icon: Bot },
   ];
 
   const sovereignNav: NavItem[] = isPatient ? [] : [

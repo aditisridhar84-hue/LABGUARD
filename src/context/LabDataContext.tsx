@@ -232,7 +232,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     components: {
       database: { status: 'HEALTHY', provider: 'Persistent Laboratory Engine', path: 'data/laboratory-db.json' },
       authentication: { status: 'HEALTHY', provider: 'Sovereign Role-Based RBAC', activeRole: 'Lab Manager' },
-      aiService: { status: 'HEALTHY', provider: 'Gemini 3.8 Flash (Server-Side Proxy)', model: 'gemini-3.8-flash' },
+      aiService: { status: 'WARNING', provider: 'Sovereign Offline Fallback Engine', model: 'openai/gpt-oss-120b' },
       externalIntegrations: { status: 'HEALTHY', activeSourcesCount: 3, totalSources: 4 },
       realTimeSync: { status: 'HEALTHY', mode: 'DEMO', pushEngine: 'SSE' }
     },

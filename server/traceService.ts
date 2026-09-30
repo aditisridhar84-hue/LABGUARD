@@ -100,12 +100,12 @@ export function getSystemTraceForEntity(entityId: string): TraceRecord {
         stage: 'AI Processing',
         timestamp: '2026-09-23 09:00:03',
         status: 'PASSED',
-        input: 'Gemini 3.8 Flash System Prompt with private operational context; zero PII sent',
+        input: 'Groq system prompt with private operational context; zero PII sent',
         output: 'Synthesized resolution: Recommend immediate purchase order of 30 kits to restore safety buffer to 22 days',
-        source: 'Gemini 3.8 Flash (Server-Side Proxy)',
+        source: 'Groq (Server-Side Proxy)',
         relevantEntity: 'AI Recommendation Synthesizer',
         processingStage: 'Sovereign RAG Reasoning Engine',
-        details: { model: 'gemini-3.8-flash', privacyCheck: 'ENFORCED_ZERO_PII' }
+        details: { model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b', privacyCheck: 'ENFORCED_ZERO_PII' }
       },
       {
         stage: 'Recommendation',
@@ -223,12 +223,12 @@ export function getSystemTraceForEntity(entityId: string): TraceRecord {
         stage: 'AI Processing',
         timestamp: '2026-09-23 10:26:15',
         status: 'PASSED',
-        input: 'Gemini 3.8 Flash operational balancing directive prompt',
+        input: 'Groq operational balancing directive prompt',
         output: 'Synthesized load balancing suggestion: Shift routine lipid/LFT runs to secondary analyzer during 14:00 window',
-        source: 'Gemini 3.8 Flash (Server-Side Proxy)',
+        source: 'Groq (Server-Side Proxy)',
         relevantEntity: 'Workload Dispatch Optimizer',
         processingStage: 'Sovereign AI Scheduling Analysis',
-        details: { model: 'gemini-3.8-flash' }
+        details: { model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b' }
       },
       {
         stage: 'Recommendation',
@@ -334,7 +334,7 @@ export function getSystemTraceForEntity(entityId: string): TraceRecord {
       status: 'PASSED',
       input: 'Private processing query dispatched with zero PII',
       output: 'Grounded operational evaluation generated',
-      source: 'Gemini 3.8 Flash Private Layer',
+      source: 'Groq Private Layer',
       relevantEntity: entityId,
       processingStage: 'Sovereign Inference'
     },

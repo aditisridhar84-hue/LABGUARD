@@ -9,7 +9,8 @@ import {
   HelpCircle,
   FileText,
   CornerDownLeft,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 import { useLabData } from '../context/LabDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -28,7 +29,12 @@ interface Message {
   };
 }
 
-export const CopilotView: React.FC = () => {
+interface CopilotViewProps {
+  compact?: boolean;
+  onClose?: () => void;
+}
+
+export const CopilotView: React.FC<CopilotViewProps> = ({ compact = false, onClose }) => {
   const { kpis, addAuditLog } = useLabData();
   const { currentUser, effectiveRole, patientRecord } = useAuth();
   const { language, t } = useLanguage();
@@ -165,6 +171,12 @@ export const CopilotView: React.FC = () => {
         },
         body: JSON.stringify({
           query: queryToSend,
+          history: messages.map(message => ({
+            role: message.sender,
+            content: message.sender === 'user'
+              ? message.text || ''
+              : message.structuredResponse?.answer || ''
+          })).filter(turn => turn.content.trim()).slice(-8),
           language,
           role: effectiveRole,
           patientContext: effectiveRole === 'patient' ? {
@@ -199,20 +211,15 @@ export const CopilotView: React.FC = () => {
       addAuditLog('AI Analysis', 'Smart Lab Copilot', queryToSend.substring(0, 30), 'Operational inquiry answered under Sovereign AI protocol.');
     } catch (err) {
       console.warn('API error, using local fallback:', err);
-      // Local fallback
       const fallbackAiMsg: Message = {
         id: `ai-${Date.now()}`,
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         structuredResponse: {
-          answer: "25-OH Vitamin D Chemiluminescent Reagent (INV-101) is at critical risk of stock depletion within 4.1 days based on current burn rate.",
-          evidence: [
-            "Current physical stock: 18 units (Threshold: 20 units)",
-            "Weekly consumption: 31 units (~4.4 units/day)",
-            "Supplier lead time: 4 days from Abbott Diagnostics India"
-          ],
-          recommendedAction: "Order 30 units from Abbott Diagnostics immediately to prevent 140+ test cancellations.",
-          sovereignNotice: "Private Processing Mode · Sovereign AI Audit Trace"
+          answer: "I couldn't reach the LABGUARD Copilot service, so I can't provide a verified answer right now.",
+          evidence: ["The Copilot API request failed."],
+          recommendedAction: "Check the server connection and try your question again.",
+          sovereignNotice: "No analysis completed · No answer generated"
         }
       };
       setMessages(prev => [...prev, fallbackAiMsg]);
@@ -222,39 +229,53 @@ export const CopilotView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className={compact ? 'flex h-full min-h-0 flex-col gap-3 p-3' : 'space-y-6'}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
-        <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full mb-1">
+      <div className={`flex items-center justify-between gap-3 border-b ${compact ? 'shrink-0 -mx-3 -mt-3 border-teal-100 bg-teal-50 px-3 pb-3 pt-3' : 'border-slate-200 flex-col pb-5 sm:flex-row sm:gap-4'}`}>
+        <div className="min-w-0">
+          {!compact && <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full mb-1">
             <Bot className="h-3.5 w-3.5" />
             Sovereign Lab Assistant
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Smart Lab Copilot
+          </div>}
+          <h1 className={`${compact ? 'text-sm text-teal-800' : 'text-2xl text-slate-900'} font-bold tracking-tight`}>
+            {compact ? 'LABGUARD Copilot' : 'Smart Lab Copilot'}
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          {!compact && <p className="text-xs text-slate-500 mt-0.5">
             Interrogate private laboratory telemetry with zero clinical diagnosis boundaries. Explainable citations only.
-          </p>
+          </p>}
         </div>
 
         {/* Clinical Disclaimer Badge */}
-        <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-xs text-amber-900 max-w-sm flex items-center gap-2">
+        {!compact && <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-1.5 text-xs text-amber-900 max-w-sm flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
           <span>
             <strong>Operational Scope:</strong> Reagents, equipment & queues only. Does not provide clinical patient diagnoses.
           </span>
-        </div>
+        </div>}
+        {compact && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close LABGUARD Copilot"
+            title="Close Copilot"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-teal-100 hover:text-teal-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Preset Query Chips */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-slate-500">Suggested Queries:</span>
+      <div className={compact ? 'flex shrink-0 gap-2 overflow-x-auto rounded-lg border border-sky-100 bg-sky-50 p-2' : 'flex flex-wrap items-center gap-2'}>
+        {!compact && <span className="text-xs font-bold text-slate-500">Suggested Queries:</span>}
         {presetQueries.map((pq, idx) => (
           <button
             key={idx}
             onClick={() => handleSend(pq)}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 hover:border-teal-300 rounded-lg shadow-2xs transition-colors text-left"
+            title={pq}
+            className={compact
+              ? 'max-w-[180px] shrink-0 truncate rounded-full border border-teal-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-teal-800 transition-colors hover:border-teal-400 hover:bg-teal-50'
+              : 'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-left text-xs font-medium text-slate-700 shadow-2xs transition-colors hover:border-teal-300 hover:bg-slate-50'}
           >
             {pq}
           </button>
@@ -262,14 +283,18 @@ export const CopilotView: React.FC = () => {
       </div>
 
       {/* Chat Messages Log */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-xs p-4 sm:p-6 min-h-[420px] max-h-[600px] overflow-y-auto space-y-4">
+      <div className={compact
+        ? 'min-h-0 flex-1 space-y-3 overflow-y-auto'
+        : 'min-h-[420px] max-h-[600px] space-y-4 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xs sm:p-6'}>
         {messages.map((msg) => {
           if (msg.sender === 'user') {
             return (
               <div key={msg.id} className="flex justify-end">
-                <div className="max-w-xl rounded-xl bg-teal-700 text-white p-3.5 shadow-xs text-xs space-y-1">
+                <div className={compact
+                  ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-teal-700 px-3 py-2 text-sm text-white'
+                  : 'max-w-xl rounded-xl bg-teal-700 p-3.5 text-xs text-white shadow-xs space-y-1'}>
                   <div className="font-medium leading-relaxed">{msg.text}</div>
-                  <div className="text-[10px] text-teal-200 text-right">{msg.timestamp}</div>
+                  {!compact && <div className="text-[10px] text-teal-200 text-right">{msg.timestamp}</div>}
                 </div>
               </div>
             );
@@ -278,9 +303,11 @@ export const CopilotView: React.FC = () => {
           const resp = msg.structuredResponse;
           return (
             <div key={msg.id} className="flex justify-start">
-              <div className="max-w-3xl rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-xs text-xs space-y-3.5 text-left">
+              <div className={compact
+                ? 'max-w-[92%] rounded-2xl rounded-bl-sm border border-sky-100 bg-sky-50 px-3 py-2.5 text-left'
+                : 'max-w-3xl rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-left shadow-xs space-y-3.5'}>
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                {!compact && <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
                   <div className="flex items-center gap-2">
                     <div className="h-6 w-6 rounded-md bg-teal-600 flex items-center justify-center text-white">
                       <Sparkles className="h-3.5 w-3.5" />
@@ -288,20 +315,20 @@ export const CopilotView: React.FC = () => {
                     <span className="font-bold text-slate-900">LABGUARD Sovereign Copilot</span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">{msg.timestamp}</span>
-                </div>
+                </div>}
 
                 {/* 1. Answer */}
-                <div className="space-y-1">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className={compact ? '' : 'space-y-1'}>
+                  {!compact && <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     Operational Answer
-                  </div>
-                  <p className="text-slate-800 text-xs font-medium leading-relaxed">
+                  </div>}
+                  <p className={compact ? 'whitespace-pre-wrap text-sm leading-relaxed text-slate-800' : 'text-xs font-medium leading-relaxed text-slate-800'}>
                     {resp?.answer}
                   </p>
                 </div>
 
                 {/* 2. Evidence */}
-                {resp?.evidence && resp.evidence.length > 0 && (
+                {!compact && resp?.evidence && resp.evidence.length > 0 && (
                   <div className="space-y-1.5 p-3 rounded-lg bg-white border border-slate-200">
                     <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                       Supporting Laboratory Telemetry & Evidence
@@ -318,7 +345,7 @@ export const CopilotView: React.FC = () => {
                 )}
 
                 {/* 3. Recommended Action */}
-                {resp?.recommendedAction && (
+                {!compact && resp?.recommendedAction && (
                   <div className="p-3 rounded-lg bg-teal-50 border border-teal-200 space-y-1">
                     <div className="text-[11px] font-bold text-teal-900 uppercase tracking-wider">
                       Recommended Action
@@ -330,13 +357,13 @@ export const CopilotView: React.FC = () => {
                 )}
 
                 {/* 4. Sovereign Notice */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                {!compact && <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="h-3 w-3 text-teal-600" />
                     {resp?.sovereignNotice || 'Private Processing Mode · Sovereign Layer'}
                   </span>
                   <span>Zero patient data egress</span>
-                </div>
+                </div>}
               </div>
             </div>
           );
@@ -344,38 +371,41 @@ export const CopilotView: React.FC = () => {
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500 flex items-center gap-2 shadow-2xs">
+            <div className={`flex items-center gap-2 text-xs text-slate-500 ${compact ? '' : 'rounded-xl border border-slate-200 bg-white p-4 shadow-2xs'}`}>
               <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
-              <span>Analyzing laboratory telemetry and tracing evidence...</span>
+              <span>{compact ? 'Thinking...' : 'Analyzing laboratory telemetry and tracing evidence...'}</span>
             </div>
           </div>
         )}
       </div>
 
       {/* Query Input Box */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSend(inputQuery);
-        }}
-        className="relative"
-      >
+      <div className={compact ? 'relative shrink-0' : 'relative'}>
         <input
           type="text"
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleSend(inputQuery);
+            }
+          }}
           placeholder="Ask an operational question (e.g. 'Why is Vitamin D reagent a risk and what should I do?')"
           disabled={isLoading}
-          className="w-full rounded-xl border border-slate-300 bg-white py-3.5 pl-4 pr-12 text-xs text-slate-900 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 shadow-xs disabled:bg-slate-100"
+          className={compact
+            ? 'w-full rounded-xl border border-teal-200 bg-white py-3.5 pl-4 pr-12 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100'
+            : 'w-full rounded-xl border border-slate-300 bg-white py-3.5 pl-4 pr-12 text-xs text-slate-900 shadow-xs placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:bg-slate-100'}
         />
         <button
-          type="submit"
+          type="button"
+          onClick={() => handleSend(inputQuery)}
           disabled={!inputQuery.trim() || isLoading}
           className="absolute right-2 top-2 h-8 w-8 rounded-lg bg-teal-700 flex items-center justify-center text-white hover:bg-teal-800 disabled:opacity-40 transition-colors shadow-xs"
         >
           <Send className="h-4 w-4" />
         </button>
-      </form>
+      </div>
     </div>
   );
 };
