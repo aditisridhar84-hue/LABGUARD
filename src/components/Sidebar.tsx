@@ -14,6 +14,7 @@ import {
   AlertOctagon,
   Lightbulb,
   SlidersHorizontal,
+  Bot,
   ShieldAlert,
   Binary,
   ScrollText,
