@@ -293,7 +293,7 @@ https://labguard-1-qn0c.onrender.com/
 
 ### Demo video
 
-A short demo walkthrough is planned for the final project showcase and can be added here once published.
+https://youtu.be/NuEtFWUZ25E
 
 Recommended sequence:
 
@@ -315,10 +315,6 @@ Risk / Analytics
 Audit / Trace
 ```
 
-```text
-🎥 Demo Video:
-////
-```
 
 ---
 
@@ -797,7 +793,6 @@ Automated testing is a recommended next step before broader production release. 
 
 ```text
 Unit tests
-API integration tests
 Authentication tests
 AI fallback tests
 Privacy/PII guardrail tests
@@ -875,42 +870,24 @@ In DEMO mode, laboratory telemetry can be simulated periodically to demonstrate 
 
 # 📊 Benchmarks
 
-Benchmark measurements should be captured before any production-grade claim. The current project documents the intended measurement categories but does not claim final values yet.
+These are indicative measurements, not production service-level guarantees. The hosted-page timings are from five sequential navigations to the public Render demo on 2026-10-01; network conditions and Render instance state were uncontrolled. The build was measured once on the local Windows development environment with Node.js v24.15.0 and npm 11.12.1.
 
 | Metric                   | Result |
-| ------------------------ | ------: |
-| Initial page load        | Pending measured benchmark |
-| `/api/dashboard` latency | Pending measured benchmark |
-| `/api/analytics` latency | Pending measured benchmark |
-| AI Copilot response time | Pending measured benchmark |
-| External sync latency    | Pending measured benchmark |
-| Build time               | Pending measured benchmark |
+| ------------------------ | ------ |
+| Initial page load         | Hosted demo: DOMContentLoaded median 676 ms (range 503–1,033 ms); load-event median 691 ms (range 503–1,037 ms), 5 navigations |
+| `/api/dashboard` latency | Not measured; endpoint requires an authenticated session |
+| `/api/analytics` latency | Not measured; endpoint requires an authenticated session |
+| AI Copilot response time | Not measured; requires authenticated access and a configured external AI service |
+| External sync latency    | Not measured; authenticated integration and source-specific conditions required |
+| Build time               | Local production build: 1.32 s wall-clock including npm process startup; Vite reported 368 ms, one run |
 
-Example benchmark methodology:
+To reproduce the local production build measurement:
 
 ```bash
 npm run build
 ```
 
-For API testing, use a tool such as:
-
-```text
-curl
-Postman
-k6
-ApacheBench
-```
-
-Document the final benchmark conditions, including:
-
-* Hardware
-* Node version
-* Network conditions
-* Number of requests
-* Average latency
-* P95 latency
-* P99 latency
-* Throughput
+The page-load values are browser navigation timings from the hosted demo, not a controlled load test. API, AI, and synchronization timings should be collected with an authorized test session and documented with the hardware, runtime, network conditions, request count, average, P95/P99 latency, and throughput. Do not infer these values from unauthenticated responses.
 
 ---
 
@@ -956,10 +933,7 @@ This is best described as a demo or prototype build rather than a production-rea
 
 ## Near Term
 
-* [ ] Automated unit tests
-* [ ] API integration tests
 * [ ] CI/CD pipeline
-* [ ] OpenAPI specification
 * [ ] Automated security scanning
 * [ ] Formal performance benchmarks
 * [ ] Expanded audit reporting
@@ -1072,38 +1046,6 @@ Team:
 ```
 
 
-
----
-
-# 🏆 ASYNC'26 Technical Review Checklist
-
-Before submission, verify:
-
-* [ ] Elevator pitch completed
-* [ ] Problem statement completed
-* [ ] Target users documented
-* [ ] Feature list completed
-* [ ] Live demo linked
-* [ ] Demo video added
-* [ ] Dashboard screenshot added
-* [ ] AI Copilot screenshot added
-* [ ] Architecture diagram added
-* [ ] End-to-end flow diagram added
-* [ ] Exact runtime versions verified
-* [ ] Installation tested from a clean environment
-* [ ] Environment variable matrix completed
-* [ ] API documentation added
-* [ ] Usage examples added
-* [ ] Testing commands documented
-* [ ] Automated tests added
-* [ ] Performance benchmarks measured
-* [ ] Known limitations documented
-* [ ] Security reporting contact added
-* [ ] License added
-* [ ] Team members added
-* [ ] No secrets committed
-* [ ] No real patient information in screenshots/demo
-* [ ] README reviewed by all team members
 
 ---
 
