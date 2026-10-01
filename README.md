@@ -328,49 +328,23 @@ To be added after final public showcase or live demo publication.
 
 ### Dashboard
 
-A dashboard screenshot will be added when the final demo assets are prepared.
+![LABGUARD Dashboard](docs/images/dashboard.jpeg)
 
-```text
-docs/images/dashboard.png
-```
-
-```markdown
-![LABGUARD Dashboard](docs/images/dashboard.png)
-```
 
 ---
 
 ### AI Copilot
 
-A sample Copilot interaction screenshot will be added once the final showcase assets are captured.
-
-```text
-docs/images/ai-copilot.png
-```
-
-```markdown
 ![LABGUARD AI Copilot](docs/images/ai-copilot.png)
-```
+
 
 ---
 
-### Inventory / Risk Monitoring
-
-An inventory and risk-monitoring screenshot will be captured for the final documentation set.
-
-```text
-docs/images/inventory-risk.png
-```
-
----
 
 ### Patient Portal
 
-The patient-facing workflow screenshot will be added with the final project assets.
 
-```text
-docs/images/patient-portal.png
-```
+![LABGUARD Patient Portal](docs/images/patient-portal.png)
 
 ---
 
