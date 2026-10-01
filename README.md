@@ -317,7 +317,7 @@ Audit / Trace
 
 ```text
 🎥 Demo Video:
-To be added after final public showcase or live demo publication.
+////
 ```
 
 ---
@@ -1051,7 +1051,7 @@ Please do **not** publicly disclose security vulnerabilities involving:
 Security contact:
 
 ```text
-Use a private maintainer email or security reporting inbox managed by the project owners.
+reddyjanavip@gmail.com
 ```
 
 Until a formal security process is configured, security-sensitive issues should not be posted publicly in GitHub Issues.
@@ -1072,10 +1072,13 @@ License status: not specified
 
 ```text
 Team:
-- LABGUARD AI contributors — project development and demonstration work
+- LABGUARD AI contributors — 
+    Aditi S Amin
+    Reddy Janavi P
+    Pratheeksha N D
 ```
 
-Add additional maintainers or owners here as the project team is formalized.
+
 
 ---
 
