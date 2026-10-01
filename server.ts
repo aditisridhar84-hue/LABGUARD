@@ -965,7 +965,7 @@ app.get('/api/appointments', (req: Request, res: Response) => {
 app.post('/api/appointments', (req: Request, res: Response) => {
   try {
     const actor = getActor(req);
-    const { doctorId, doctorName, department, date, time, room, reason } = req.body;
+    const { doctorId, doctorName, department, date, time, room, reason, consultationType } = req.body;
     const patientId = actor.role === 'patient' ? req.auth?.patientId : req.body.patientId;
     const patientName = actor.role === 'patient' ? actor.user : req.body.patientName;
 
@@ -982,6 +982,7 @@ app.post('/api/appointments', (req: Request, res: Response) => {
         department: department || 'General OPD',
         date,
         time,
+        consultationType,
         room: room || 'OPD Room',
         reason
       },

@@ -166,13 +166,20 @@ export const PatientPortalView: React.FC = () => {
         patientId: pInfo.patientId,
         patientName: pInfo.name,
         date: appointmentDate,
-        timeSlot,
+        time: timeSlot,
+        room: doc.roomNumber || doc.consultationRoom,
         consultationType: 'REGULAR'
       });
 
       if (res.success) {
         setBookingSuccess(`Your OPD Appointment is saved! Token Number: ${res.appointment?.tokenNumber || 'T-Next'}`);
-        fetchMyRecord();
+        const createdAppointment = res.appointment;
+        if (createdAppointment) {
+          setPatientData((current) => ({
+            ...current,
+            appointments: [createdAppointment, ...current.appointments],
+          }));
+        }
         setTimeout(() => {
           setBookModalOpen(false);
           setBookingSuccess(null);

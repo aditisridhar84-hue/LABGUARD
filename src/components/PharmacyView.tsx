@@ -7,20 +7,47 @@ import { Pill, Plus, Search, ShoppingBag, Truck, CheckCircle2, AlertTriangle, Ar
 
 export const PharmacyBillsView: React.FC = () => {
   const { pharmacyBills } = useLabData();
+  const { t } = useLanguage();
+  const [search, setSearch] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('ALL');
+  const visibleBills = pharmacyBills.filter((bill) => {
+    const matchesSearch = `${bill.billNumber} ${bill.patientName} ${bill.patientId}`.toLowerCase().includes(search.toLowerCase());
+    return matchesSearch && (paymentStatus === 'ALL' || bill.paymentStatus === paymentStatus);
+  });
 
   return (
     <section className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Pharmacy Bills</h1>
-        <p className="mt-1 text-sm text-slate-500">Pharmacy transactions and payment status</p>
+        <h1 className="text-xl font-semibold text-slate-900">{t('pharmacyBills')}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t('pharmacyBillsDescription')} · {visibleBills.length} {t('matchingRecords')}</p>
+      </div>
+      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row">
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t('searchPharmacyBills')}
+          aria-label={t('searchPharmacyBills')}
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+        />
+        <select
+          value={paymentStatus}
+          onChange={(event) => setPaymentStatus(event.target.value)}
+          aria-label={t('paymentStatus')}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+        >
+          <option value="ALL">{t('allPayments')}</option>
+          <option value="PAID">{t('paid')}</option>
+          <option value="PENDING">{t('pending')}</option>
+        </select>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr><th className="px-4 py-3">Bill</th><th className="px-4 py-3">Patient</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Items</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Payment</th></tr>
+            <tr><th className="px-4 py-3">{t('billNumber')}</th><th className="px-4 py-3">{t('patient')}</th><th className="px-4 py-3">{t('appointmentDate')}</th><th className="px-4 py-3">{t('items')}</th><th className="px-4 py-3">{t('total')}</th><th className="px-4 py-3">{t('paymentStatus')}</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {pharmacyBills.map((bill) => (
+            {visibleBills.map((bill) => (
               <tr key={bill.id}>
                 <td className="px-4 py-3 font-medium text-slate-900">{bill.billNumber}</td>
                 <td className="px-4 py-3">{bill.patientName}</td>
@@ -30,7 +57,7 @@ export const PharmacyBillsView: React.FC = () => {
                 <td className="px-4 py-3">{bill.paymentStatus}</td>
               </tr>
             ))}
-            {pharmacyBills.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No pharmacy bills found.</td></tr>}
+            {visibleBills.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">{pharmacyBills.length ? t('noMatchingPharmacyBills') : t('noPharmacyBills')}</td></tr>}
           </tbody>
         </table>
       </div>

@@ -155,9 +155,18 @@ class DatabaseEngine extends EventEmitter {
             parsed.pharmacyDispensing = getDefaultDispensing(now);
             modified = true;
           }
-          if (!parsed.pharmacyBills) {
-            parsed.pharmacyBills = getDefaultPharmacyBills(now);
+          const defaultPharmacyBills = getDefaultPharmacyBills(now);
+          if (!Array.isArray(parsed.pharmacyBills)) {
+            parsed.pharmacyBills = defaultPharmacyBills;
             modified = true;
+          } else {
+            const existingBillIds = new Set(parsed.pharmacyBills.map((bill: PharmacyBillRecord) => bill.id));
+            for (const bill of defaultPharmacyBills) {
+              if (!existingBillIds.has(bill.id)) {
+                parsed.pharmacyBills.push(bill);
+                modified = true;
+              }
+            }
           }
           if (!parsed.pharmacyDeliveries || parsed.pharmacyDeliveries.length === 0) {
             parsed.pharmacyDeliveries = getDefaultDeliveries(now);
@@ -1570,6 +1579,7 @@ class DatabaseEngine extends EventEmitter {
       department: string;
       date: string;
       time: string;
+      consultationType?: AppointmentRecord['consultationType'];
       room: string;
       reason?: string;
     },
@@ -1590,6 +1600,7 @@ class DatabaseEngine extends EventEmitter {
       department: data.department,
       date: data.date,
       time: data.time,
+      consultationType: data.consultationType,
       room: data.room,
       status: 'CONFIRMED',
       reason: data.reason || 'Routine OPD Consultation',
@@ -1870,4 +1881,3 @@ class DatabaseEngine extends EventEmitter {
 }
 
 export const dbEngine = new DatabaseEngine();
-

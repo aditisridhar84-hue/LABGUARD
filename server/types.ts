@@ -61,8 +61,9 @@ export interface AppointmentRecord extends BaseEntity {
   department: string;
   date: string;
   time: string;
+  consultationType?: 'REGULAR' | 'FOLLOW UP' | 'SPECIALIST' | 'EMERGENCY';
   room: string;
-  status: 'REQUESTED' | 'CONFIRMED' | 'CHECKED-IN' | 'COMPLETED' | 'CANCELLED';
+  status: 'REQUESTED' | 'CONFIRMED' | 'CHECKED-IN' | 'CHECKED IN' | 'IN PROGRESS' | 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
   reason?: string;
   tokenNumber: string;
 }

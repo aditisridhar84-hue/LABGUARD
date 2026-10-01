@@ -129,7 +129,9 @@ interface LabDataContextType {
 
   // Doctors & OPD Methods
   updateDoctorStatus: (doctorId: string, status: DoctorRecord['status']) => Promise<{ success: boolean; error?: string }>;
-  createAppointment: (data: any) => Promise<{ success: boolean; appointment?: AppointmentRecord; error?: string }>;
+  createAppointment: (data: Pick<AppointmentRecord, 'patientId' | 'patientName' | 'doctorId' | 'doctorName' | 'department' | 'date' | 'time' | 'room'> & {
+    consultationType?: 'REGULAR' | 'FOLLOW UP' | 'SPECIALIST' | 'EMERGENCY';
+  }) => Promise<{ success: boolean; appointment?: AppointmentRecord; error?: string }>;
   updateAppointmentStatus: (appointmentId: string, status: AppointmentRecord['status']) => Promise<{ success: boolean; error?: string }>;
 
   // Pharmacy Methods

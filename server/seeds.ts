@@ -538,7 +538,7 @@ export function getDefaultDispensing(now: string): PharmacyDispensingRecord[] {
 }
 
 export function getDefaultPharmacyBills(now: string): PharmacyBillRecord[] {
-  return [
+  const bills: PharmacyBillRecord[] = [
     {
       id: 'PB-1001',
       billNumber: 'PH-BILL-901',
@@ -571,6 +571,62 @@ export function getDefaultPharmacyBills(now: string): PharmacyBillRecord[] {
       updatedAt: now
     }
   ];
+  const demoPatients = [
+    ['PT-1002', 'Priya Iyer'],
+    ['PT-1003', 'Amitabh Verma'],
+    ['PT-1004', 'Sunita Deshmukh'],
+    ['PT-1005', 'Vikramjit Singh'],
+    ['PT-1006', 'Ananya Roy'],
+    ['PT-1007', 'Farooq Abdullah Khan'],
+    ['PT-1008', 'Meenakshi Sundaram'],
+    ['PT-1009', 'Kavita Nair'],
+    ['PT-1010', 'Deepak Joshi'],
+    ['PT-1011', 'Rohan Mehta'],
+    ['PT-1012', 'Arjun Reddy'],
+    ['PT-1013', 'Lakshmi Narayanan'],
+    ['PT-1014', 'Harpreet Singh'],
+    ['PT-1015', 'Meera Krishnan'],
+    ['PT-1016', 'Rahul Kapoor'],
+    ['PT-1017', 'Nisha Patel'],
+    ['PT-1018', 'Sanjay Rao'],
+    ['PT-1019', 'Divya Menon'],
+    ['PT-1020', 'Karan Shah'],
+    ['PT-1021', 'Anita Das'],
+  ];
+  const medicineItems = [
+    { drugId: 'DRG-102', drugName: 'Metformin 500mg SR Tablets', quantity: 30, unitPrice: 5 },
+    { drugId: 'DRG-104', drugName: 'Atorvastatin 20mg Tablets', quantity: 15, unitPrice: 12 },
+    { drugId: 'DRG-106', drugName: 'Pantoprazole 40mg Tablets', quantity: 10, unitPrice: 8 },
+    { drugId: 'DRG-108', drugName: 'Vitamin D3 60,000 IU Capsules', quantity: 4, unitPrice: 32 },
+  ];
+  for (let index = 0; index < demoPatients.length; index += 1) {
+    const [patientId, patientName] = demoPatients[index];
+    const firstItem = medicineItems[index % medicineItems.length];
+    const secondItem = medicineItems[(index + 1) % medicineItems.length];
+    const items = [firstItem, secondItem].map((item) => ({
+      ...item,
+      total: item.quantity * item.unitPrice,
+    }));
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+    const discount = index % 3 === 0 ? 25 : 0;
+    bills.push({
+      id: `PB-${1002 + index}`,
+      billNumber: `PH-BILL-${902 + index}`,
+      patientId,
+      patientName,
+      date: `2026-09-${String(24 + (index % 7)).padStart(2, '0')}`,
+      items,
+      subtotal,
+      tax: Math.round(subtotal * 0.05 * 100) / 100,
+      discount,
+      total: Math.round((subtotal + subtotal * 0.05 - discount) * 100) / 100,
+      paymentStatus: index % 6 === 0 ? 'PENDING' : 'PAID',
+      paymentMethod: (['UPI', 'Cash', 'Card', 'Insurance'] as const)[index % 4],
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  return bills;
 }
 
 export function getDefaultDeliveries(now: string): PharmacyDeliveryRecord[] {
