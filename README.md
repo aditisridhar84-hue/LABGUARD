@@ -447,23 +447,16 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-
-    Q[User Question]
-       ↓
-    AUTH[Role & Session Check]
-       ↓
-    PII[PII / Privacy Guardrail]
-       ↓
-    FACTS[Collect Verified Operational Facts]
-       ↓
-    DECISION{Groq Configured?}
+    Q[User Question] --> AUTH[Role & Session Check]
+    AUTH --> PII[PII / Privacy Guardrail]
+    PII --> FACTS[Collect Verified Operational Facts]
+    FACTS --> DECISION{Groq Configured?}
 
     DECISION -->|Yes| GROQ[Server-side Groq Request]
     DECISION -->|No| FALLBACK[Deterministic Fallback Engine]
 
     GROQ --> RESPONSE[Structured Operational Response]
     FALLBACK --> RESPONSE
-
     RESPONSE --> TRACE[Audit / Trace]
     TRACE --> UI[Frontend]
 ```
