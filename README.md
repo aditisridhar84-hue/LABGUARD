@@ -1,12 +1,10 @@
-# 🧪 LABGUARD AI
+#  LABGUARD AI
 
-### Private Laboratory Intelligence & Operations Platform
-
+### Private Laboratory Intelligence & Operations Platform 
 [![Live Demo](https://img.shields.io/badge/Live-Demo-2ea44f?style=for-the-badge)](https://labguard-1-qn0c.onrender.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square\&logo=react\&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.x-3178C6?style=flat-square\&logo=typescript\&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?style=flat-square\&logo=vite\&logoColor=white)](https://vite.dev/)
-[![Express](https://img.shields.io/badge/Express-4.x-000000?style=flat-square\&logo=express\&logoColor=white)](https://expressjs.com/)
 
 > **LABGUARD AI** is a private laboratory intelligence platform that combines laboratory operations management, role-based access, inventory and equipment monitoring, analytics, external data synchronization, explainable AI assistance, and audit tracing in a single web application.
 
