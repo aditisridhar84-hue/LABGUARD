@@ -71,6 +71,7 @@ interface LabDataContextType {
   suppliers: SupplierRecord[];
   billing: BillingRecord[];
   auditLog: AuditRecord[];
+  queryAuditLog: (filters: { action?: string; search?: string }) => Promise<{ success: boolean; logs?: AuditRecord[]; total?: number; error?: string }>;
   risks: AIRisk[];
   recommendations: AIRecommendation[];
   notifications: LabNotification[];
@@ -102,9 +103,10 @@ interface LabDataContextType {
   markAllNotificationsRead: () => Promise<void>;
   systemHealth: SystemHealthState;
   environmentStatus: 'LIVE DATA' | 'DEMO SIMULATION' | 'LAST SYNCHRONIZED DATA' | 'OFFLINE';
+  operationalDataStatus: 'loading' | 'ready' | 'offline';
   lastSyncTimestamp: string;
   telemetryMode: 'LIVE' | 'DEMO';
-  setTelemetryMode: (mode: 'LIVE' | 'DEMO') => Promise<void>;
+  setTelemetryMode: (mode: 'LIVE' | 'DEMO') => Promise<{ success: boolean; error?: string }>;
   refreshAllData: () => Promise<void>;
 
   // Real CRUD Actions
@@ -117,14 +119,12 @@ interface LabDataContextType {
   verifyResult: (resultId: string, verifierName: string, comments?: string) => Promise<{ success: boolean; error?: string }>;
   createInventoryItem: (itemData: any) => Promise<{ success: boolean; error?: string }>;
   restockInventoryItem: (itemId: string, quantityToAdd: number, poNumber?: string) => Promise<{ success: boolean; error?: string }>;
-  simulatedRestockItem: (itemId: string, quantityToAdd: number) => void;
   createEquipment: (equipData: any) => Promise<{ success: boolean; error?: string }>;
   scheduleEquipmentMaintenance: (equipmentId: string, scheduledDate: string, engineerName?: string, notes?: string) => Promise<{ success: boolean; error?: string }>;
   createStaff: (staffData: any) => Promise<{ success: boolean; error?: string }>;
   createSupplier: (supplierData: any) => Promise<{ success: boolean; error?: string }>;
   createInvoice: (invoiceData: any) => Promise<{ success: boolean; error?: string }>;
   executeRecommendation: (recId: string) => Promise<{ success: boolean; error?: string }>;
-  resolveRisk: (riskId: string) => void;
   addAuditLog: (action: AuditRecord['action'], dataset: string, recordAffected: string, details: string) => void;
 
   // Doctors & OPD Methods
@@ -141,7 +141,7 @@ interface LabDataContextType {
   // External Data Sync & Integration Center
   syncIntegrationSource: (sourceId: string) => Promise<{ success: boolean; message: string }>;
   testIntegrationConnection: (endpointUrl: string, authType: string) => Promise<{ reachable: boolean; latencyMs: number; protocol: string; message: string }>;
-  toggleIntegrationStatus: (sourceId: string) => Promise<{ success: boolean }>;
+  toggleIntegrationStatus: (sourceId: string) => Promise<{ success: boolean; error?: string }>;
 
   // CSV Processing
   uploadedValidationResult: CSVValidationResult | null;
@@ -224,6 +224,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Telemetry & Environment
   const [telemetryMode, setTelemetryModeState] = useState<'LIVE' | 'DEMO'>('DEMO');
   const [environmentStatus, setEnvironmentStatus] = useState<'LIVE DATA' | 'DEMO SIMULATION' | 'LAST SYNCHRONIZED DATA' | 'OFFLINE'>('DEMO SIMULATION');
+  const [operationalDataStatus, setOperationalDataStatus] = useState<'loading' | 'ready' | 'offline'>('loading');
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<string>(new Date().toISOString().substring(11, 19));
 
   // System Health
@@ -254,6 +255,24 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [demoStep, setDemoStep] = useState<number>(1);
 
   const getAuthHeaders = useCallback(() => ({ 'Content-Type': 'application/json' }), []);
+
+  const queryAuditLog = useCallback(async (filters: { action?: string; search?: string }) => {
+    if (!currentUser?.permissions.includes('audit:read')) {
+      return { success: false, error: 'You do not have permission to read audit records.' };
+    }
+    const params = new URLSearchParams({ limit: '100' });
+    if (filters.action && filters.action !== 'All') params.set('action', filters.action);
+    if (filters.search?.trim()) params.set('search', filters.search.trim());
+    try {
+      const response = await fetch(`/api/audit?${params.toString()}`, { headers: getAuthHeaders(), credentials: 'same-origin' });
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error || 'Could not load matching audit records.' };
+      const totalHeader = response.headers.get('X-Audit-Total');
+      return { success: true, logs: Array.isArray(data) ? data as AuditRecord[] : [], total: totalHeader ? Number(totalHeader) : Array.isArray(data) ? data.length : 0 };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Could not load matching audit records.' };
+    }
+  }, [currentUser, getAuthHeaders]);
 
   // Refresh all state from REST API
   const refreshAllData = useCallback(async () => {
@@ -426,17 +445,23 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setPharmacists(pharmData);
       }
 
+      const dashboardSnapshotLoaded = dashRes.status === 'fulfilled' && dashRes.value.ok;
+      const inventorySnapshotLoaded = !hasPermission('inventory:read') || (invRes.status === 'fulfilled' && invRes.value.ok);
+      setOperationalDataStatus(dashboardSnapshotLoaded && inventorySnapshotLoaded ? 'ready' : 'offline');
       setLastSyncTimestamp(new Date().toISOString().substring(11, 19));
     } catch (err) {
       console.warn('[LabData] API sync fallback to local store:', err);
       setEnvironmentStatus('OFFLINE');
+      setOperationalDataStatus('offline');
     }
   }, [currentUser, getAuthHeaders]);
 
   // Initial load
   useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
+    if (!currentUser) return;
+    setOperationalDataStatus('loading');
+    void refreshAllData();
+  }, [currentUser, refreshAllData]);
 
   // Connect to Real-time SSE Telemetry Stream
   useEffect(() => {
@@ -524,10 +549,13 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (res.ok) {
         setTelemetryModeState(mode);
         setEnvironmentStatus(mode === 'LIVE' ? 'LIVE DATA' : 'DEMO SIMULATION');
+        return { success: true };
+      } else {
+        const data = await res.json().catch(() => ({}));
+        return { success: false, error: data.error || 'Failed to save telemetry mode' };
       }
-    } catch {
-      setTelemetryModeState(mode);
-      setEnvironmentStatus(mode === 'LIVE' ? 'LIVE DATA' : 'DEMO SIMULATION');
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to save telemetry mode' };
     }
   };
 
@@ -570,27 +598,23 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Notifications
   const markNotificationRead = async (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     try {
-      await fetch(`/api/notifications/${id}/read`, {
+      const res = await fetch(`/api/notifications/${id}/read`, {
         method: 'PATCH',
         headers: getAuthHeaders()
       });
-    } catch {
-      // Local state already updated
-    }
+      if (res.ok) setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch { /* Keep the notification unread when the server is unavailable. */ }
   };
 
   const markAllNotificationsRead = async () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     try {
-      await fetch('/api/notifications/mark-all-read', {
+      const res = await fetch('/api/notifications/mark-all-read', {
         method: 'POST',
         headers: getAuthHeaders()
       });
-    } catch {
-      // Local state already updated
-    }
+      if (res.ok) setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch { /* Keep notifications unread when the server is unavailable. */ }
   };
 
   const unreadAlertsCount = useMemo(() => {
@@ -787,27 +811,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return { success: false, error: data.error || 'Failed to restock item' };
       }
       setInventory(prev => prev.map(i => i.itemId === itemId ? data : i));
-
-      // Update recommendations & risks
-      setRecommendations(prev => prev.map(rec => {
-        if (rec.recId === 'REC-01' && itemId === 'INV-101') {
-          return { ...rec, executed: true, actionLabel: 'Replenishment Order Queued ✓' };
-        }
-        return rec;
-      }));
-
-      setRisks(prev => prev.map(r => {
-        if (r.evidence.itemOrEntity?.includes(itemId)) {
-          return {
-            ...r,
-            level: 'low',
-            title: `${r.title} [Replenished]`,
-            description: `Stock replenished by ${quantityToAdd} units. Safe stock level achieved.`
-          };
-        }
-        return r;
-      }));
-
+      await refreshAllData();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
@@ -920,18 +924,11 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return { success: false, error: data.error || 'Failed to execute recommendation' };
       }
       setRecommendations(prev => prev.map(r => r.recId === recId ? { ...r, executed: true, actionLabel: 'Executed ✓' } : r));
-      if (recId === 'REC-01') {
-        refreshAllData();
-      }
+      await refreshAllData();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
-  };
-
-  const resolveRisk = (riskId: string) => {
-    setRisks(prev => prev.filter(r => r.riskId !== riskId));
-    addAuditLog('AI Analysis', 'AI Risk Center', riskId, 'Operational risk marked as mitigated by laboratory supervisor.');
   };
 
   // Doctors & OPD Methods
@@ -1058,12 +1055,15 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         headers: getAuthHeaders()
       });
       const data = await res.json();
+      // Sync failures also create a failed job and audit record; refresh either outcome.
+      fetch('/api/integrations').then(r => r.ok ? r.json() : Promise.reject()).then(setDataSources).catch(() => {});
+      fetch('/api/sync').then(r => r.ok ? r.json() : Promise.reject()).then(setSyncJobs).catch(() => {});
       if (!res.ok) {
         return { success: false, message: data.error || 'Sync failed' };
       }
-      // Refresh integration lists
-      fetch('/api/integrations').then(r => r.json()).then(setDataSources).catch(() => {});
-      fetch('/api/sync').then(r => r.json()).then(setSyncJobs).catch(() => {});
+      if (data.success === false) {
+        return { success: false, message: data.message || 'The source sync failed; retained the last successful snapshot.' };
+      }
       return { success: true, message: data.message };
     } catch (err: any) {
       return { success: false, message: err.message || 'Network error during sync' };
@@ -1077,7 +1077,9 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         headers: getAuthHeaders(),
         body: JSON.stringify({ endpointUrl, authType })
       });
-      return await res.json();
+      const data = await res.json();
+      if (!res.ok) return { reachable: false, latencyMs: 0, protocol: 'ERR', message: data.error || 'Connection test failed' };
+      return data;
     } catch (err: any) {
       return { reachable: false, latencyMs: 0, protocol: 'ERR', message: err.message };
     }
@@ -1094,9 +1096,9 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setDataSources(prev => prev.map(s => s.id === sourceId ? data.source : s));
         return { success: true };
       }
-      return { success: false };
-    } catch {
-      return { success: false };
+      return { success: false, error: data.error || 'Could not update integration status.' };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Network error while updating integration status.' };
     }
   };
 
@@ -1306,7 +1308,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const nextDemoStep = () => {
-    if (demoStep >= 7) {
+    if (demoStep >= 4) {
       setDemoModeActive(false);
       return;
     }
@@ -1316,10 +1318,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (next === 1) setActiveTab('dashboard');
     else if (next === 2) setActiveTab('risk-center');
     else if (next === 3) setActiveTab('recommendations');
-    else if (next === 4) setActiveTab('recommendations');
-    else if (next === 5) setActiveTab('what-if');
-    else if (next === 6) setActiveTab('copilot');
-    else if (next === 7) setActiveTab('control-center');
+    else if (next === 4) setActiveTab('audit');
   };
 
   const prevDemoStep = () => {
@@ -1329,10 +1328,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (prev === 1) setActiveTab('dashboard');
     else if (prev === 2) setActiveTab('risk-center');
     else if (prev === 3) setActiveTab('recommendations');
-    else if (prev === 4) setActiveTab('recommendations');
-    else if (prev === 5) setActiveTab('what-if');
-    else if (prev === 6) setActiveTab('copilot');
-    else if (prev === 7) setActiveTab('control-center');
+    else if (prev === 4) setActiveTab('audit');
   };
 
   const exitDemoMode = () => {
@@ -1343,9 +1339,6 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (demoStep === 1) return 'DATA';
     if (demoStep === 2) return 'RISK';
     if (demoStep === 3) return 'EVIDENCE';
-    if (demoStep === 4) return 'ACTION';
-    if (demoStep === 5) return 'INSIGHT';
-    if (demoStep === 6) return 'EVIDENCE';
     return 'ACTION';
   }, [demoStep]);
 
@@ -1366,6 +1359,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         suppliers,
         billing,
         auditLog,
+        queryAuditLog,
         risks,
         recommendations,
         notifications,
@@ -1391,6 +1385,7 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         markAllNotificationsRead,
         systemHealth,
         environmentStatus,
+        operationalDataStatus,
         lastSyncTimestamp,
         telemetryMode,
         setTelemetryMode,
@@ -1404,16 +1399,12 @@ export const LabDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         verifyResult,
         createInventoryItem,
         restockInventoryItem,
-        simulatedRestockItem: (itemId: string, quantityToAdd: number) => {
-          restockInventoryItem(itemId, quantityToAdd);
-        },
         createEquipment,
         scheduleEquipmentMaintenance,
         createStaff,
         createSupplier,
         createInvoice,
         executeRecommendation,
-        resolveRisk,
         addAuditLog,
         updateDoctorStatus,
         createAppointment,

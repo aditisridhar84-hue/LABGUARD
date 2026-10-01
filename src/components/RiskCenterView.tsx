@@ -17,7 +17,7 @@ import { useLabData } from '../context/LabDataContext';
 import { AIRisk } from '../types';
 
 export const RiskCenterView: React.FC = () => {
-  const { risks, simulatedRestockItem, resolveRisk, setActiveTab, openInspectTrace } = useLabData();
+  const { risks, setActiveTab, openInspectTrace } = useLabData();
   const [selectedRiskId, setSelectedRiskId] = useState<string | null>(risks[0]?.riskId || null);
 
   const selectedRisk = risks.find(r => r.riskId === selectedRiskId) || risks[0];
@@ -32,14 +32,6 @@ export const RiskCenterView: React.FC = () => {
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">🟡 MEDIUM</span>;
       case 'low':
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-100 text-teal-800 border border-teal-200">🟢 LOW / ADVISORY</span>;
-    }
-  };
-
-  const handleAction = (risk: AIRisk) => {
-    if (risk.actionType === 'restock') {
-      simulatedRestockItem('INV-101', 30);
-    } else {
-      resolveRisk(risk.riskId);
     }
   };
 
@@ -250,13 +242,17 @@ export const RiskCenterView: React.FC = () => {
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <button
-                    onClick={() => handleAction(selectedRisk)}
-                    className="px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>{selectedRisk.actionLabel}</span>
-                  </button>
+                  {selectedRisk.riskId === 'RISK-01' && selectedRisk.actionType === 'restock' ? (
+                    <button
+                      onClick={() => setActiveTab('recommendations')}
+                      className="px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Review Restock Recommendation</span>
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-500">A persisted action is not connected for this risk yet.</span>
+                  )}
 
                   <button
                     onClick={() => setActiveTab('what-if')}

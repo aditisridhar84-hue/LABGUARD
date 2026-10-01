@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ScrollText, 
   Search, 
@@ -11,21 +11,31 @@ import {
 import { useLabData } from '../context/LabDataContext';
 
 export const AuditLogView: React.FC = () => {
-  const { auditLog } = useLabData();
+  const { auditLog, queryAuditLog } = useLabData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAction, setSelectedAction] = useState<string>('All');
+  const [filteredLogs, setFilteredLogs] = useState(auditLog);
+  const [matchingTotal, setMatchingTotal] = useState(auditLog.length);
+  const [filterError, setFilterError] = useState<string | null>(null);
+  const [filterLoading, setFilterLoading] = useState(false);
 
-  const filteredLogs = auditLog.filter((log) => {
-    const matchesSearch = 
-      log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.dataset.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.recordAffected.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesAction = selectedAction === 'All' || log.action === selectedAction;
-    return matchesSearch && matchesAction;
-  });
+  useEffect(() => {
+    let active = true;
+    setFilterLoading(true);
+    const timer = window.setTimeout(async () => {
+      const result = await queryAuditLog({ action: selectedAction, search: searchTerm });
+      if (!active) return;
+      if (result.success && result.logs) {
+        setFilteredLogs(result.logs);
+        setMatchingTotal(result.total ?? result.logs.length);
+        setFilterError(null);
+      } else {
+        setFilterError(result.error || 'Could not load matching audit records.');
+      }
+      setFilterLoading(false);
+    }, searchTerm ? 250 : 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [queryAuditLog, searchTerm, selectedAction]);
 
   const handleExportCSV = () => {
     const headers = ['Audit ID', 'Timestamp', 'User', 'Role', 'Action', 'Dataset', 'Record Affected', 'Status', 'Details'];
@@ -59,6 +69,8 @@ export const AuditLogView: React.FC = () => {
     'Data Validation',
     'AI Analysis',
     'Recommendation Generated',
+    'Recommendation Executed',
+    'RESTOCK_INVENTORY',
     'Patient Record Access',
     'Result Verification',
     'Inventory Update',
@@ -119,12 +131,13 @@ export const AuditLogView: React.FC = () => {
           </select>
 
           <span className="text-xs font-semibold text-slate-500 ml-2 whitespace-nowrap">
-            Showing {filteredLogs.length} of {auditLog.length} events
+            {filterLoading ? 'Searching…' : `Showing ${filteredLogs.length} of ${matchingTotal} matching events`}
           </span>
         </div>
       </div>
 
       {/* Main Audit Log Table */}
+      {filterError && <p role="alert" className="text-xs text-rose-700">{filterError}</p>}
       <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">

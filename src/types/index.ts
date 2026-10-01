@@ -177,22 +177,12 @@ export interface AuditRecord {
   timestamp: string;
   user: string;
   role: string;
-  action: 
-    | 'Login' 
-    | 'Data Upload' 
-    | 'Data Validation' 
-    | 'AI Analysis' 
-    | 'Recommendation Generated' 
-    | 'Patient Record Access' 
-    | 'Result Verification' 
-    | 'Inventory Update' 
-    | 'Equipment Update' 
-    | 'Settings Change'
-    | 'Sovereign Policy Check';
+  action: string;
   dataset: string;
   recordAffected: string;
-  status: 'Authorized' | 'Audited' | 'Restricted' | 'Completed';
+  status: 'Authorized' | 'Audited' | 'Restricted' | 'Completed' | 'Failed';
   details: string;
+  integrityHash?: string;
 }
 
 export interface AIRisk {
@@ -491,5 +481,38 @@ export interface TraceRecord {
   summary: string;
   status: 'SUCCESS' | 'WARNING' | 'FAILED';
   failedStage?: string;
+  evidence?: TracePersistedEvidence;
   steps: TraceStep[];
+}
+
+export interface TraceAuditEvidence {
+  auditId: string;
+  action: string;
+  recordAffected: string;
+  timestamp: string;
+  details: string;
+  integrityHash: string;
+}
+
+export interface TracePersistedEvidence {
+  currentStock: {
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    reorderLevel: number;
+    status: string;
+  };
+  transaction?: {
+    id: string;
+    transactionType: string;
+    quantity: number;
+    remainingQuantity: number;
+    unit: string;
+    reason: string;
+    conductedBy: string;
+    timestamp: string;
+  };
+  restockAudit?: TraceAuditEvidence;
+  recommendationAudit?: TraceAuditEvidence;
 }

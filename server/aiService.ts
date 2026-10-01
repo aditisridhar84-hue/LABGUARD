@@ -2,6 +2,7 @@ import { dbEngine } from './db';
 import { calculateDeterministicAnalytics, detectOperationalRisks } from './analytics';
 
 export interface CopilotResponse {
+  mode: 'groq' | 'deterministic_fallback';
   answer: string;
   evidence: string[];
   source?: string;
@@ -86,6 +87,7 @@ export class AIService {
 
     if (isPatientSpecificQuery && userRole !== 'patient') {
       return {
+        mode: 'deterministic_fallback',
         answer: language === 'hi'
           ? 'मैं इस सामान्य प्रयोगशाला चैनल में व्यक्तिगत रोगी की गोपनीय जानकारी या परीक्षण परिणाम साझा नहीं कर सकता। रोगी स्वास्थ्य रिकॉर्ड पूरी तरह से सुरक्षित हैं।'
           : language === 'kn'
@@ -111,6 +113,7 @@ export class AIService {
 
     if (mentionsVitaminD && asksForReagentUse) {
       return {
+        mode: 'deterministic_fallback',
         answer: `To use the 25-OH Vitamin D reagent (INV-101), draw from the current stock of ${groundedFacts.vitaminDStock}. Verify kit integrity and expiry. Load only the required volume specified in the current manufacturer IFU into the designated validated analyzer. Record the number of kits used in LIMS after each batch and update inventory counts. At approximately 4.4 kits per day, stock will last about 4 days, so initiate a reorder now to avoid interruption.`,
         evidence: [
           `Current stock: ${groundedFacts.vitaminDStock}; each kit supports 100 tests.`,
@@ -214,6 +217,7 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
           try {
             const parsed = JSON.parse(text);
             return {
+              mode: 'groq',
               answer: parsed.answer,
               evidence: parsed.evidence || [],
               source: parsed.source || 'NovaCare Verified Diagnostics & Pharmacy Telemetry Stream',
@@ -224,6 +228,7 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
             };
           } catch {
             return {
+              mode: 'groq',
               answer: text,
               evidence: [
                 `Total Tests Today: ${groundedFacts.totalTestsToday}`,
@@ -244,6 +249,7 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
     }
 
     return {
+      mode: 'deterministic_fallback',
       answer: language === 'hi'
         ? 'मैं इस प्रश्न को स्पष्ट रूप से नहीं समझ पाया। कृपया बताएं कि आप किस बारे में जानना चाहते हैं: अभिकर्मक, उपकरण, लंबित परीक्षण या टर्नअराउंड समय।'
         : language === 'kn'
@@ -265,7 +271,7 @@ FORMAT YOUR RESPONSE AS STRICT JSON:
     context: { pharmacy: any[]; doctors: any[]; actor?: any },
     language: string = 'en',
     history: CopilotTurn[] = []
-  ): CopilotResponse | null {
+  ): Omit<CopilotResponse, 'mode'> | null {
     const normalizedQuery = query.trim().toLowerCase().replace(/[.!?]+$/, '');
     const isGreeting = /^(hi|hello|hey|good morning|good afternoon|good evening|namaste|नमस्ते|ನಮಸ್ಕಾರ)$/.test(normalizedQuery);
 

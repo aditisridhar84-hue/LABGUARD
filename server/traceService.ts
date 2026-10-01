@@ -1,5 +1,5 @@
 import { dbEngine } from './db';
-import { calculateDeterministicAnalytics, detectOperationalRisks } from './analytics';
+import { detectOperationalRisks } from './analytics';
 import { TraceRecord, TraceStep } from './types';
 
 export function getSystemTraceForEntity(entityId: string): TraceRecord {
@@ -11,124 +11,42 @@ export function getSystemTraceForEntity(entityId: string): TraceRecord {
   const orders = dbEngine.getCollection('testOrders');
   const risks = detectOperationalRisks();
   const recs = dbEngine.getCollection('recommendations');
-  const dataSources = dbEngine.getCollection('dataSources');
+  const auditLogs = dbEngine.getCollection('auditLogs');
+  const inventoryTransactions = dbEngine.getCollection('inventoryTransactions');
 
   // Check if it's RISK-01 or REC-01 or INV-101 (Vitamin D)
-  if (entityId === 'RISK-01' || entityId === 'REC-01' || entityId === 'INV-101') {
-    const vitD = inventory.find(i => i.itemId === 'INV-101') || {
-      quantity: 18,
-      reorderLevel: 20,
-      weeklyConsumption: 31,
-      leadTimeDays: 4,
-      unit: 'Kits',
-      batchNumber: 'VD-2026-B884'
-    };
-    const src = dataSources.find(s => s.id === 'SRC-04') || {
-      sourceName: 'Abbott Supply Chain Link EDI',
-      status: 'WARNING'
-    };
+  if (entityId === 'RISK-01' || entityId === 'RSK-01' || entityId === 'REC-01' || entityId === 'INV-101') {
+    const vitD = inventory.find(i => i.itemId === 'INV-101');
+    if (!vitD) throw new Error('Vitamin D inventory item INV-101 is unavailable');
+
+    const rec = recs.find(r => r.recId === 'REC-01');
+    const currentRisk = risks.find(r => r.riskId === 'RISK-01');
+    const lastRestock = inventoryTransactions
+      .filter(t => t.itemId === 'INV-101' && t.transactionType === 'restock')
+      .sort((a, b) => new Date(b.createdAt || b.timestamp).getTime() - new Date(a.createdAt || a.timestamp).getTime())[0];
+    const restockAudit = auditLogs
+      .filter(log => log.action === 'RESTOCK_INVENTORY' && log.recordAffected === 'INV-101')
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    const recommendationAudit = auditLogs
+      .filter(log => log.action === 'Recommendation Executed' && log.recordAffected === 'REC-01')
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
     const daysRemaining = Number(((vitD.quantity / (vitD.weeklyConsumption || 31)) * 7).toFixed(1));
+    const actionRecorded = Boolean(lastRestock && restockAudit && rec?.executed);
+    const persistedAt = recommendationAudit?.timestamp || restockAudit?.timestamp;
+    const actionSummary = actionRecorded && lastRestock && restockAudit && recommendationAudit
+      ? `Persisted demo restock: +${lastRestock.quantity} ${lastRestock.unit}; stock now ${lastRestock.remainingQuantity}. Audit events ${restockAudit.auditId} and ${recommendationAudit.auditId} recorded at ${persistedAt}. No supplier order was transmitted.`
+      : 'No completed restock action with matching inventory transaction and audit entries is recorded yet.';
 
     const steps: TraceStep[] = [
-      {
-        stage: 'Data Source',
-        timestamp: '2026-09-23 09:00:00',
-        status: src.status === 'ERROR' ? 'FAILED' : 'PASSED',
-        input: 'Endpoint: https://edi.abbottdiagnostics.in/feed/reagents; Protocol: JSON EDI Feed',
-        output: '200 OK — Inbound reagent catalog lot feed received (30 records, lot metadata)',
-        source: src.sourceName,
-        relevantEntity: 'INV-101 (25-OH Vitamin D Total CLIA Kit)',
-        processingStage: 'Ingestion & Demultiplexing',
-        details: { endpoint: 'https://edi.abbottdiagnostics.in/feed/reagents', frequency: '60 min' }
-      },
-      {
-        stage: 'Data Retrieved',
-        timestamp: '2026-09-23 09:00:01',
-        status: 'PASSED',
-        input: 'SQL/JSON Query: getCollection("inventory").find(itemId === "INV-101")',
-        output: `Fetched inventory record: Physical Quantity = ${vitD.quantity} ${vitD.unit}, Reorder Threshold = ${vitD.reorderLevel}`,
-        source: 'Persistent Laboratory Database (data/laboratory-db.json)',
-        relevantEntity: 'INV-101',
-        processingStage: 'Database Extraction',
-        details: { quantity: vitD.quantity, reorderLevel: vitD.reorderLevel, lot: vitD.batchNumber }
-      },
-      {
-        stage: 'Validation',
-        timestamp: '2026-09-23 09:00:01',
-        status: 'PASSED',
-        input: 'Zod Validator: inventoryItemSchema.safeParse(record)',
-        output: 'Schema integrity check PASSED: Non-negative integer quantity confirmed, lot format validated, storage temp valid',
-        source: 'Server Schema Validation Engine',
-        relevantEntity: 'INV-101',
-        processingStage: 'Data Integrity & Range Verification',
-        details: { schema: 'inventoryItemSchema', errorsCount: 0 }
-      },
-      {
-        stage: 'Metrics Calculated',
-        timestamp: '2026-09-23 09:00:02',
-        status: daysRemaining <= 4.5 ? 'WARNING' : 'PASSED',
-        input: `Current stock: ${vitD.quantity}; Weekly burn rate: ${vitD.weeklyConsumption} units/week; Lead time: ${vitD.leadTimeDays} days`,
-        output: `Days of stock remaining: ${daysRemaining} days (Threshold: ≤ 4.5 days for Critical depletion)`,
-        source: 'Deterministic Analytics Engine (calculateDeterministicAnalytics)',
-        relevantEntity: 'Clinical Consumption Model',
-        processingStage: 'Burn-Rate & Lead-Time Projection',
-        details: { daysRemaining, dailyBurn: Number((vitD.weeklyConsumption / 7).toFixed(2)), leadTimeDays: vitD.leadTimeDays }
-      },
-      {
-        stage: 'Risk Detection',
-        timestamp: '2026-09-23 09:00:02',
-        status: 'PASSED',
-        input: `Rule EVAL: (currentStock <= reorderLevel) && (daysRemaining <= leadTimeDays + buffer)`,
-        output: `RISK DETECTED: RISK-01 (Critical Shortage). Confidence: 98.4%. Stockout expected before replenishment arrives.`,
-        source: 'Operational Risk Evaluation Heuristic',
-        relevantEntity: 'RISK-01',
-        processingStage: 'Rule-Based Anomaly Classifier',
-        details: { confidence: 98.4, severity: 'critical', category: 'Inventory' }
-      },
-      {
-        stage: 'Evidence Selected',
-        timestamp: '2026-09-23 09:00:03',
-        status: 'PASSED',
-        input: 'Aggregating verifiable operational attributes for explainability review',
-        output: `Evidence set: Stock at ${vitD.quantity} kits (Threshold ${vitD.reorderLevel}), weekly consumption ${vitD.weeklyConsumption}, supplier turnaround 4 days`,
-        source: 'Audit Chained Ledger & Batch Logs',
-        relevantEntity: 'INV-101 Evidence Vector',
-        processingStage: 'Evidence Extraction',
-        details: { affectedPatientsEst: 140, priorityOrders: 18 }
-      },
-      {
-        stage: 'AI Processing',
-        timestamp: '2026-09-23 09:00:03',
-        status: 'PASSED',
-        input: 'Groq system prompt with private operational context; zero PII sent',
-        output: 'Synthesized resolution: Recommend immediate purchase order of 30 kits to restore safety buffer to 22 days',
-        source: 'Groq (Server-Side Proxy)',
-        relevantEntity: 'AI Recommendation Synthesizer',
-        processingStage: 'Sovereign RAG Reasoning Engine',
-        details: { model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b', privacyCheck: 'ENFORCED_ZERO_PII' }
-      },
-      {
-        stage: 'Recommendation',
-        timestamp: '2026-09-23 09:00:04',
-        status: 'PASSED',
-        input: 'Formulate executable action ticket with vendor catalog PO reference',
-        output: 'Generated Action: "Restock Reagent Now (30 units)" -> Abbott Diagnostics India PO',
-        source: 'AI Action Center (REC-01)',
-        relevantEntity: 'REC-01',
-        processingStage: 'Decision Support Action Formulation',
-        details: { recommendedAction: 'Dispatch PO-ABBOTT-2026-09', suggestedUnits: 30 }
-      },
-      {
-        stage: 'Final Output',
-        timestamp: '2026-09-23 09:00:04',
-        status: 'PASSED',
-        input: 'Render actionable recommendation to Supervisor UI & Dispatch Event Stream',
-        output: 'Recommendation active on Supervisor Dashboard and Action Center with one-click restock authorization',
-        source: 'LabGuard Event Bus & UI Dispatcher',
-        relevantEntity: 'REC-01 / RISK-01',
-        processingStage: 'Final Decision Stream Delivery',
-        details: { displayedInDashboard: true, actionReady: true }
-      }
+      { stage: 'Data Source', timestamp, status: 'PASSED', input: 'Read INV-101 from the server database', output: `Loaded ${vitD.itemName} (${vitD.itemId})`, source: 'LABGUARD JSON persistence', relevantEntity: 'INV-101', processingStage: 'Data retrieval' },
+      { stage: 'Data Retrieved', timestamp, status: 'PASSED', input: 'Current inventory record', output: `Physical stock ${vitD.quantity} ${vitD.unit}; reorder threshold ${vitD.reorderLevel}; lot ${vitD.batchNumber}`, source: 'data/laboratory-db.json', relevantEntity: 'INV-101', processingStage: 'Inventory lookup', details: { quantity: vitD.quantity, unit: vitD.unit, reorderLevel: vitD.reorderLevel, weeklyConsumption: vitD.weeklyConsumption, leadTimeDays: vitD.leadTimeDays, batchNumber: vitD.batchNumber } },
+      { stage: 'Validation', timestamp, status: vitD.quantity >= 0 ? 'PASSED' : 'FAILED', input: 'Inventory quantity and threshold', output: vitD.quantity >= 0 ? 'Quantity is non-negative; risk rule can be evaluated.' : 'Invalid negative quantity.', source: 'Inventory record validation', relevantEntity: 'INV-101', processingStage: 'Data validation' },
+      { stage: 'Metrics Calculated', timestamp, status: daysRemaining <= vitD.leadTimeDays ? 'WARNING' : 'PASSED', input: `Stock ${vitD.quantity}; weekly consumption ${vitD.weeklyConsumption}; supplier lead time ${vitD.leadTimeDays} days`, output: `${daysRemaining} days of stock estimated at current weekly consumption.`, source: 'Deterministic Analytics Engine', relevantEntity: 'INV-101', processingStage: 'Burn-rate projection', details: { daysRemaining, dailyBurn: Number((vitD.weeklyConsumption / 7).toFixed(2)), leadTimeDays: vitD.leadTimeDays } },
+      { stage: 'Risk Detection', timestamp, status: currentRisk ? 'WARNING' : 'PASSED', input: `Rule: stock (${vitD.quantity}) <= reorder threshold (${vitD.reorderLevel})`, output: currentRisk ? `RISK-01 active: ${currentRisk.title}` : `RISK-01 is not currently active; stock (${vitD.quantity}) is above the reorder threshold (${vitD.reorderLevel}).`, source: 'Operational Risk Evaluation Heuristic', relevantEntity: 'RISK-01', processingStage: 'Rule-based risk evaluation', details: { active: Boolean(currentRisk), severity: currentRisk?.level || 'resolved', confidence: currentRisk?.confidence } },
+      { stage: 'Evidence Selected', timestamp, status: 'PASSED', input: 'Inventory and consumption fields used by the risk rule', output: `Stock ${vitD.quantity} ${vitD.unit}; threshold ${vitD.reorderLevel}; weekly usage ${vitD.weeklyConsumption}; lead time ${vitD.leadTimeDays} days.`, source: 'Current inventory record', relevantEntity: 'INV-101 Evidence Vector', processingStage: 'Evidence extraction', details: { currentStock: vitD.quantity, reorderThreshold: vitD.reorderLevel, weeklyUsage: vitD.weeklyConsumption, leadTimeDays: vitD.leadTimeDays } },
+      { stage: 'AI Processing', timestamp, status: 'PASSED', input: 'Evaluate current inventory facts against the configured operational rule', output: currentRisk?.reason || 'Current stock is above the configured reorder threshold; no active inventory alert is generated.', source: 'Deterministic Operational Risk Engine', relevantEntity: 'RISK-01', processingStage: 'Operational decision support' },
+      { stage: 'Recommendation', timestamp, status: rec ? 'PASSED' : 'WARNING', input: rec?.problem || 'REC-01 recommendation record lookup', output: rec ? `${rec.recommendedAction}${rec.executed ? ' (marked executed)' : ' (awaiting user confirmation)'}` : 'No REC-01 recommendation record exists.', source: 'Persisted AI Recommendation Center', relevantEntity: 'REC-01', processingStage: 'Recommendation display', details: { executed: Boolean(rec?.executed), executedAt: rec?.executedAt } },
+      { stage: 'Final Output', timestamp: persistedAt || timestamp, status: actionRecorded ? 'PASSED' : 'WARNING', input: 'Check inventory transaction, linked recommendation state, and audit events', output: actionSummary, source: 'Inventory transaction ledger + hash-chained audit log', relevantEntity: 'INV-101 / REC-01', processingStage: 'Persistence and audit confirmation', details: { actionRecorded, transactionId: lastRestock?.id, transaction: lastRestock, restockAuditId: restockAudit?.auditId, restockIntegrityHash: restockAudit?.integrityHash, recommendationAuditId: recommendationAudit?.auditId, recommendationIntegrityHash: recommendationAudit?.integrityHash } }
     ];
 
     return {
@@ -136,8 +54,14 @@ export function getSystemTraceForEntity(entityId: string): TraceRecord {
       timestamp,
       triggerEntityId: entityId,
       triggerEntityType: entityId.startsWith('REC') ? 'recommendation' : 'risk',
-      summary: `Explainable End-to-End Decision Trace for 25-OH Vitamin D Reagent Critical Shortage (RISK-01 / REC-01)`,
-      status: 'SUCCESS',
+      summary: `Current inventory risk and persisted recommendation action trace for ${vitD.itemName}`,
+      status: actionRecorded ? 'SUCCESS' : currentRisk ? 'WARNING' : 'SUCCESS',
+      evidence: {
+        currentStock: { itemId: vitD.itemId, itemName: vitD.itemName, quantity: vitD.quantity, unit: vitD.unit, reorderLevel: vitD.reorderLevel, status: currentRisk ? 'ACTIVE RISK' : 'RESOLVED' },
+        ...(lastRestock ? { transaction: { id: lastRestock.id, transactionType: lastRestock.transactionType, quantity: lastRestock.quantity, remainingQuantity: lastRestock.remainingQuantity, unit: lastRestock.unit, reason: lastRestock.reason, conductedBy: lastRestock.conductedBy, timestamp: lastRestock.timestamp } } : {}),
+        ...(restockAudit ? { restockAudit: { auditId: restockAudit.auditId, action: restockAudit.action, recordAffected: restockAudit.recordAffected, timestamp: restockAudit.timestamp, details: restockAudit.details, integrityHash: restockAudit.integrityHash } } : {}),
+        ...(recommendationAudit ? { recommendationAudit: { auditId: recommendationAudit.auditId, action: recommendationAudit.action, recordAffected: recommendationAudit.recordAffected, timestamp: recommendationAudit.timestamp, details: recommendationAudit.details, integrityHash: recommendationAudit.integrityHash } } : {})
+      },
       steps
     };
   }

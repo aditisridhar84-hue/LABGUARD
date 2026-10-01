@@ -74,7 +74,7 @@ export const PharmacyView: React.FC = () => {
   const [dispensePatientName, setDispensePatientName] = useState(patients[0]?.name || 'Aarav Sharma');
   const [selectedRxId, setSelectedRxId] = useState<string>('');
   const [dispensingItems, setDispensingItems] = useState<{ drugId: string; quantity: number }[]>([
-    { drugId: 'MED-101', quantity: 20 }
+    { drugId: 'DRG-101', quantity: 20 }
   ]);
   const [dispensePaymentMethod, setDispensePaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('UPI');
   const [dispenseDeliveryType, setDispenseDeliveryType] = useState<'COUNTER PICKUP' | 'HOME DELIVERY'>('COUNTER PICKUP');

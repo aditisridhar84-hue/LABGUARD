@@ -7,6 +7,7 @@ export interface AuthContextType {
   previewRole: UserRole | null;
   isAuthenticated: boolean;
   isAuthLoading: boolean;
+  refreshSession: () => Promise<boolean>;
   isPatient: boolean;
   patientRecord: Patient | null;
   profileModalOpen: boolean;
@@ -46,6 +47,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [profileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [loginModalOpen, setLoginModalOpen] = useState<boolean>(false);
+
+  const refreshSession = async (): Promise<boolean> => {
+    setIsAuthLoading(true);
+    try {
+      const res = await fetch('/api/auth/session', { credentials: 'same-origin' });
+      if (res.status === 401) {
+        setCurrentUser(null);
+        return false;
+      }
+      if (!res.ok) throw new Error(`Session check failed (${res.status})`);
+      const data = await res.json();
+      if (!data?.authenticated || !data.user) {
+        setCurrentUser(null);
+        return false;
+      }
+
+      const user = data.user;
+      setCurrentUser({
+        id: user.id || user.userId,
+        name: user.name,
+        email: user.email || '',
+        role: user.role,
+        department: user.department || '',
+        phone: user.phone,
+        patientId: user.patientId,
+        language: user.language || 'en',
+        permissions: Array.isArray(data.permissions) ? data.permissions : [],
+      });
+      setPreviewRole(null);
+      return true;
+    } catch (error) {
+      console.error('Unable to refresh the authenticated session.', error);
+      setCurrentUser(null);
+      return false;
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -234,6 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         previewRole,
         isAuthenticated,
         isAuthLoading,
+        refreshSession,
         isPatient,
         patientRecord,
         profileModalOpen,

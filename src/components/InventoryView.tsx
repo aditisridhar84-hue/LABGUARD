@@ -3,20 +3,31 @@ import { Boxes, Search, Filter, AlertTriangle, Plus, Sparkles, CheckCircle2, Arr
 import { useLabData } from '../context/LabDataContext';
 import { InventoryItem } from '../types';
 
+const INVENTORY_CATEGORIES = [
+  'Reagents', 'Test Kits', 'Sample Containers', 'Tubes', 'Needles',
+  'Gloves', 'Masks', 'PPE', 'Cleaning Supplies', 'Printer Supplies'
+] satisfies InventoryItem['category'][];
+
 export const InventoryView: React.FC = () => {
-  const { inventory, restockInventoryItem, createInventoryItem, setActiveTab } = useLabData();
+  const { inventory, recommendations, restockInventoryItem, createInventoryItem, setActiveTab } = useLabData();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [showAddModal, setShowAddModal] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [creatingItem, setCreatingItem] = useState(false);
+  const [restockFeedback, setRestockFeedback] = useState<Record<string, { kind: 'success' | 'error'; message: string }>>({});
+  const [restockingItemId, setRestockingItemId] = useState<string | null>(null);
+  const [additionalRestockQuantity, setAdditionalRestockQuantity] = useState('1');
 
   // New item form state
   const [formData, setFormData] = useState({
     itemName: '',
-    category: 'Reagent' as const,
+    category: 'Reagents' as const,
     quantity: 50,
     unit: 'Kits',
+    minimumStock: 15,
     reorderLevel: 25,
     unitCost: 1500,
     supplier: 'Roche Diagnostics India',
@@ -25,23 +36,41 @@ export const InventoryView: React.FC = () => {
   });
 
   const handleRestock = async (itemId: string, qty: number) => {
-    await restockInventoryItem(itemId, qty, `PO-ROCHE-${Math.floor(1000 + Math.random() * 9000)}`);
+    setRestockingItemId(itemId);
+    const result = await restockInventoryItem(itemId, qty);
+    setRestockFeedback(prev => ({
+      ...prev,
+      [itemId]: result.success
+        ? { kind: 'success', message: `Server saved +${qty} received units.` }
+        : { kind: 'error', message: `Not confirmed as saved: ${result.error || 'The server did not complete this action.'}` }
+    }));
+    setRestockingItemId(null);
   };
 
   const handleCreateItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creatingItem) return;
+    setCreatingItem(true);
     setFormError(null);
-    const res = await createInventoryItem({
-      ...formData,
-      batchNumber: `LOT-2026-${Math.floor(100 + Math.random() * 900)}`,
-      expiryDate: '2026-12-31',
-      location: 'Reagent Walk-in Cold Room 2-8°C'
-    });
-    if (!res.success) {
-      setFormError(res.error || 'Failed to add item');
-      return;
+    setCreateSuccess(null);
+    try {
+      const res = await createInventoryItem({
+        ...formData,
+        batchNumber: `LOT-2026-${Math.floor(100 + Math.random() * 900)}`,
+        expiryDate: '2026-12-31',
+        location: 'Reagent Walk-in Cold Room 2-8°C'
+      });
+      if (!res.success) {
+        setFormError(res.error || 'Failed to add item');
+        return;
+      }
+      setShowAddModal(false);
+      setCreateSuccess('Inventory item saved by the server.');
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Failed to add item');
+    } finally {
+      setCreatingItem(false);
     }
-    setShowAddModal(false);
   };
 
   const filteredInventory = inventory.filter((item) => {
@@ -57,6 +86,7 @@ export const InventoryView: React.FC = () => {
   });
 
   const totalValuation = inventory.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
+  const representedCategories = Array.from(new Set(inventory.map(item => item.category))).sort();
 
   const getStatusBadge = (status: InventoryItem['status']) => {
     switch (status) {
@@ -96,7 +126,7 @@ export const InventoryView: React.FC = () => {
             <span className="text-sm font-bold text-slate-900 tabular-nums">₹{totalValuation.toLocaleString()}</span>
           </div>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { setFormError(null); setCreateSuccess(null); setShowAddModal(true); }}
             className="px-3 py-1.5 text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg shadow-2xs transition-colors flex items-center gap-1"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -111,6 +141,8 @@ export const InventoryView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {createSuccess && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-900">{createSuccess}</p>}
 
       {/* FILTER & SEARCH */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
@@ -144,10 +176,7 @@ export const InventoryView: React.FC = () => {
             className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-slate-700 focus:border-teal-500 focus:outline-none"
           >
             <option value="All">All Categories</option>
-            <option value="Reagent">Reagents</option>
-            <option value="Control">Quality Controls</option>
-            <option value="Calibrator">Calibrators</option>
-            <option value="Consumable">Consumables</option>
+            {representedCategories.map(category => <option key={category} value={category}>{category}</option>)}
           </select>
         </div>
       </div>
@@ -172,13 +201,14 @@ export const InventoryView: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredInventory.map((item) => {
-                const isCriticalVitaminD = item.itemId === 'INV-101';
+                const isBelowReorder = item.quantity <= item.reorderLevel || item.status === 'Critical';
+                const hasExecutedVitaminDRecommendation = /vitamin\s*d/i.test(item.itemName) && recommendations.some(
+                  recommendation => recommendation.executed && /vitamin\s*d/i.test(`${recommendation.title} ${recommendation.problem}`)
+                );
                 return (
                   <tr
                     key={item.itemId}
-                    className={`transition-colors ${
-                      isCriticalVitaminD ? 'bg-red-50/50 hover:bg-red-50/80 font-medium' : 'hover:bg-slate-50'
-                    }`}
+                    className={`transition-colors ${isBelowReorder ? 'bg-red-50/50 hover:bg-red-50/80' : 'hover:bg-slate-50'}`}
                   >
                     <td className="px-3.5 py-2 font-mono text-teal-700 font-semibold">{item.itemId}</td>
                     <td className="px-3.5 py-2">
@@ -195,18 +225,50 @@ export const InventoryView: React.FC = () => {
                     <td className="px-3.5 py-2 text-slate-700 font-medium">{item.supplier}</td>
                     <td className="px-3.5 py-2">{getStatusBadge(item.status)}</td>
                     <td className="px-3.5 py-2 text-right">
-                      <button
-                        onClick={() => handleRestock(item.itemId, 30)}
-                        className={`px-2.5 py-1 text-[11px] font-bold rounded transition-colors inline-flex items-center gap-1 ${
-                          isCriticalVitaminD
-                            ? 'bg-red-600 hover:bg-red-700 text-white shadow-2xs'
-                            : 'bg-teal-50 hover:bg-teal-100 text-teal-800'
-                        }`}
-                        title="Place real restock PO in database"
-                      >
-                        <Plus className="h-3 w-3" />
-                        <span>+30 Units</span>
-                      </button>
+                      {hasExecutedVitaminDRecommendation ? (
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-1 text-[10px] font-semibold text-teal-800" role="status">
+                            <CheckCircle2 className="h-3 w-3" /> Demo restock recorded
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              aria-label={`Additional stock quantity for ${item.itemName}`}
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={additionalRestockQuantity}
+                              onChange={event => setAdditionalRestockQuantity(event.target.value)}
+                              className="w-14 rounded border border-slate-200 px-1.5 py-1 text-[10px]"
+                            />
+                            <button
+                              onClick={() => {
+                                const quantity = Number(additionalRestockQuantity);
+                                if (Number.isInteger(quantity) && quantity > 0) void handleRestock(item.itemId, quantity);
+                              }}
+                              disabled={restockingItemId === item.itemId || !Number.isInteger(Number(additionalRestockQuantity)) || Number(additionalRestockQuantity) < 1}
+                              className="rounded bg-teal-50 px-2 py-1 text-[10px] font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Record a separate future stock receipt"
+                            >
+                              {restockingItemId === item.itemId ? 'Saving…' : 'Record receipt'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => void handleRestock(item.itemId, 30)}
+                          disabled={restockingItemId === item.itemId}
+                          className="inline-flex items-center gap-1 rounded bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-800 transition-colors hover:bg-teal-100 disabled:cursor-wait disabled:opacity-60"
+                          title="Record received stock in the server database"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>{restockingItemId === item.itemId ? 'Saving…' : 'Record +30'}</span>
+                        </button>
+                      )}
+                      {restockFeedback[item.itemId] && (
+                        <div role={restockFeedback[item.itemId].kind === 'error' ? 'alert' : 'status'} className={`mt-1 max-w-40 text-[10px] ${restockFeedback[item.itemId].kind === 'success' ? 'text-teal-700' : 'text-red-700'}`}>
+                          {restockFeedback[item.itemId].message}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -257,10 +319,7 @@ export const InventoryView: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-teal-600 bg-white"
                   >
-                    <option value="Reagent">Reagent</option>
-                    <option value="Control">Control</option>
-                    <option value="Calibrator">Calibrator</option>
-                    <option value="Consumable">Consumable</option>
+                    {INVENTORY_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}
                   </select>
                 </div>
                 <div>
@@ -276,7 +335,18 @@ export const InventoryView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Minimum Stock</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={formData.minimumStock}
+                    onChange={(e) => setFormData({ ...formData, minimumStock: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-teal-600"
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Reorder Level</label>
                   <input
@@ -323,9 +393,10 @@ export const InventoryView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold transition-colors"
+                  disabled={creatingItem}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold transition-colors disabled:cursor-wait disabled:opacity-60"
                 >
-                  Save Item
+                  {creatingItem ? 'Saving…' : 'Save Item'}
                 </button>
               </div>
             </form>

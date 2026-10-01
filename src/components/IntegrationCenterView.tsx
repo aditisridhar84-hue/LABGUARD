@@ -48,6 +48,24 @@ export const IntegrationCenterView: React.FC = () => {
     enabledDataTypes: 'Complete Blood Count, Biochemistry Assays'
   });
   const [addError, setAddError] = useState<string | null>(null);
+  const [telemetrySaving, setTelemetrySaving] = useState(false);
+  const [telemetryFeedback, setTelemetryFeedback] = useState<{ message: string; error: boolean } | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<Record<string, { message: string; error: boolean }>>({});
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const handleTelemetryMode = async (mode: 'LIVE' | 'DEMO') => {
+    setTelemetrySaving(true);
+    setTelemetryFeedback(null);
+    try {
+      const result = await setTelemetryMode(mode);
+      setTelemetryFeedback({
+        message: result.success ? `${mode === 'LIVE' ? 'Live feeds' : 'Demo simulation'} mode saved.` : (result.error || 'Could not save telemetry mode.'),
+        error: !result.success
+      });
+    } finally {
+      setTelemetrySaving(false);
+    }
+  };
 
   const handleTestConnection = async (sourceId: string, endpointUrl: string, authType: string) => {
     setTestingId(sourceId);
@@ -68,9 +86,20 @@ export const IntegrationCenterView: React.FC = () => {
   const handleSyncNow = async (sourceId: string) => {
     setSyncingId(sourceId);
     try {
-      await syncIntegrationSource(sourceId);
+      const result = await syncIntegrationSource(sourceId);
+      setSyncFeedback(prev => ({ ...prev, [sourceId]: { message: result.message, error: !result.success } }));
     } finally {
       setSyncingId(null);
+    }
+  };
+
+  const handleToggleStatus = async (sourceId: string) => {
+    setTogglingId(sourceId);
+    try {
+      const result = await toggleIntegrationStatus(sourceId);
+      setSyncFeedback(prev => ({ ...prev, [sourceId]: { message: result.success ? 'Integration status saved.' : (result.error || 'Could not save integration status.'), error: !result.success } }));
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -151,7 +180,8 @@ export const IntegrationCenterView: React.FC = () => {
             {/* Live Telemetry Mode Switcher */}
             <div className="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center gap-1 text-xs">
               <button
-                onClick={() => setTelemetryMode('DEMO')}
+                onClick={() => handleTelemetryMode('DEMO')}
+                disabled={telemetrySaving}
                 className={`px-3 py-1.5 rounded-md font-medium transition-all ${
                   telemetryMode === 'DEMO'
                     ? 'bg-amber-600 text-white shadow-xs'
@@ -161,7 +191,8 @@ export const IntegrationCenterView: React.FC = () => {
                 Demo Simulation
               </button>
               <button
-                onClick={() => setTelemetryMode('LIVE')}
+                onClick={() => handleTelemetryMode('LIVE')}
+                disabled={telemetrySaving}
                 className={`px-3 py-1.5 rounded-md font-medium transition-all ${
                   telemetryMode === 'LIVE'
                     ? 'bg-emerald-600 text-white shadow-xs'
@@ -181,6 +212,12 @@ export const IntegrationCenterView: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {telemetryFeedback && (
+          <div role={telemetryFeedback.error ? 'alert' : 'status'} className={`mt-3 rounded-lg border px-3 py-2 text-xs ${telemetryFeedback.error ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+            {telemetryFeedback.message}
+          </div>
+        )}
 
         {/* Resilient Fallback Notice */}
         <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs text-slate-700">
@@ -364,6 +401,11 @@ export const IntegrationCenterView: React.FC = () => {
                     <div className="text-[11px] mt-0.5">{testResult.message}</div>
                   </div>
                 )}
+                {syncFeedback[source.id] && (
+                  <div role={syncFeedback[source.id].error ? 'alert' : 'status'} className={`mb-4 rounded-lg border p-2.5 text-xs ${syncFeedback[source.id].error ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+                    {syncFeedback[source.id].message}
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
@@ -379,7 +421,8 @@ export const IntegrationCenterView: React.FC = () => {
 
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => toggleIntegrationStatus(source.id)}
+                    onClick={() => handleToggleStatus(source.id)}
+                    disabled={togglingId === source.id}
                     className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs transition-colors"
                     title={source.status === 'CONNECTED' ? 'Pause / Disconnect' : 'Enable / Connect'}
                   >

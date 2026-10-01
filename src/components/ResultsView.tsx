@@ -6,6 +6,22 @@ export const ResultsView: React.FC = () => {
   const { results, verifyResult } = useLabData();
   const [searchTerm, setSearchTerm] = useState('');
   const [flagFilter, setFlagFilter] = useState('All');
+  const [verifyingResultId, setVerifyingResultId] = useState<string | null>(null);
+  const [verificationFeedback, setVerificationFeedback] = useState<{ message: string; error: boolean } | null>(null);
+
+  const handleVerify = async (resultId: string) => {
+    setVerifyingResultId(resultId);
+    setVerificationFeedback(null);
+    try {
+      const response = await verifyResult(resultId, 'Dr. Aris Thorne, MD');
+      setVerificationFeedback({
+        message: response.success ? `Result ${resultId} was verified and saved.` : (response.error || 'Could not verify result.'),
+        error: !response.success
+      });
+    } finally {
+      setVerifyingResultId(null);
+    }
+  };
 
   const filteredResults = results.filter((r) => {
     const matchesSearch = 
@@ -86,6 +102,11 @@ export const ResultsView: React.FC = () => {
       </div>
 
       {/* Results Table */}
+      {verificationFeedback && (
+        <div role={verificationFeedback.error ? 'alert' : 'status'} className={`rounded-lg border px-3 py-2 text-xs ${verificationFeedback.error ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+          {verificationFeedback.message}
+        </div>
+      )}
       <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -124,10 +145,11 @@ export const ResultsView: React.FC = () => {
                   <td className="px-3.5 py-2">
                     {r.status === 'Preliminary' ? (
                       <button
-                        onClick={() => verifyResult(r.resultId, 'Dr. Aris Thorne, MD')}
-                        className="px-2 py-1 text-[11px] font-bold text-white bg-teal-700 hover:bg-teal-800 rounded transition-colors"
+                        onClick={() => handleVerify(r.resultId)}
+                        disabled={verifyingResultId === r.resultId}
+                        className="px-2 py-1 text-[11px] font-bold text-white bg-teal-700 hover:bg-teal-800 rounded transition-colors disabled:opacity-50"
                       >
-                        Sign-Off
+                        {verifyingResultId === r.resultId ? 'Saving…' : 'Sign-Off'}
                       </button>
                     ) : (
                       <span className="text-[11px] text-teal-700 font-semibold flex items-center gap-1">

@@ -14,6 +14,7 @@ export const PatientsView: React.FC = () => {
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mutationSuccess, setMutationSuccess] = useState<string | null>(null);
 
   // In-UI Delete Confirmation Modal State
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
@@ -45,6 +46,7 @@ export const PatientsView: React.FC = () => {
       status: 'Active'
     });
     setFormError(null);
+    setMutationSuccess(null);
     setShowFormModal(true);
   };
 
@@ -61,6 +63,7 @@ export const PatientsView: React.FC = () => {
       status: p.status
     });
     setFormError(null);
+    setMutationSuccess(null);
     setShowFormModal(true);
   };
 
@@ -85,6 +88,7 @@ export const PatientsView: React.FC = () => {
           return;
         }
       }
+      setMutationSuccess(editingPatient ? 'Patient changes saved to the server.' : 'Patient record saved to the server.');
       setShowFormModal(false);
     } finally {
       setIsSubmitting(false);
@@ -106,6 +110,7 @@ export const PatientsView: React.FC = () => {
     setIsDeleting(false);
 
     if (res.success) {
+      setMutationSuccess(options?.archive ? 'Patient record archived on the server.' : 'Patient record deleted from the server.');
       setDeleteModalOpen(false);
       setPatientToDelete(null);
       if (selectedPatient?.patientId === patientToDelete.patientId) {
@@ -132,6 +137,7 @@ export const PatientsView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
+      {mutationSuccess && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{mutationSuccess}</div>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full mb-1">

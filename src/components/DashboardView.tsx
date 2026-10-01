@@ -16,7 +16,8 @@ import {
   Terminal,
   Pill,
   Stethoscope,
-  ClipboardList
+  ClipboardList,
+  Loader2
 } from 'lucide-react';
 import { useLabData } from '../context/LabDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,13 +25,48 @@ import { useLanguage } from '../context/LanguageContext';
 import { PatientPortalView } from './PatientPortalView';
 
 export const DashboardView: React.FC = () => {
-  const { kpis, setActiveTab, risks, openInspectTrace, pharmacyMedicines, prescriptions, appointments } = useLabData();
+  const { kpis, setActiveTab, risks, inventory, openInspectTrace, pharmacyMedicines, prescriptions, appointments, operationalDataStatus, refreshAllData } = useLabData();
   const { currentUser, effectiveRole } = useAuth();
   const { t } = useLanguage();
 
   if (effectiveRole === 'patient') {
     return <PatientPortalView />;
   }
+
+  if (operationalDataStatus !== 'ready') {
+    return (
+      <div className="flex min-h-72 items-center justify-center p-6">
+        <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 text-center shadow-xs">
+          {operationalDataStatus === 'loading' ? (
+            <>
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-teal-700" aria-hidden="true" />
+              <h2 className="mt-3 text-sm font-bold text-slate-900">Loading current laboratory data</h2>
+              <p className="mt-1 text-xs text-slate-500">The dashboard will appear after current risk and inventory records are checked.</p>
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="mx-auto h-6 w-6 text-amber-600" aria-hidden="true" />
+              <h2 className="mt-3 text-sm font-bold text-slate-900">Current dashboard data is unavailable</h2>
+              <p className="mt-1 text-xs text-slate-500">Reconnect to the LABGUARD server to view current risks and inventory. Demo fallback data is not shown as current dashboard data.</p>
+              <button
+                type="button"
+                onClick={() => void refreshAllData()}
+                className="mt-4 rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-teal-800"
+              >
+                Retry data load
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const vitaminD = inventory.find(item => item.itemId === 'INV-101');
+  const vitaminDRisk = risks.find(risk => risk.riskId === 'RISK-01');
+  const vitaminDDaysRemaining = vitaminD
+    ? ((vitaminD.quantity / (vitaminD.weeklyConsumption || 31)) * 7).toFixed(1)
+    : null;
 
   // Test volume data (last 14 days representative)
   const volumeData = [1050, 1120, 1090, 1180, 1210, 1140, 1260, 1220, 1190, 1240, 1280, 1210, 1235, 1248];
@@ -119,18 +155,23 @@ export const DashboardView: React.FC = () => {
                   🧠 {t('todayLabBrief')}
                 </span>
                 <span className="rounded bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-800">
-                  3 {t('priorityFlags')}
+                  {risks.length} {t('priorityFlags')}
                 </span>
               </div>
               <p className="text-sm font-semibold text-slate-800">
-                Supervisor Directive: Review 25-OH Vitamin D reagent inventory first, followed by Biochemistry workload balancing.
+                {vitaminDRisk
+                  ? 'Supervisor Directive: Review 25-OH Vitamin D reagent inventory first, followed by Biochemistry workload balancing.'
+                  : `Supervisor Directive: Vitamin D stock is above its reorder threshold (${vitaminD?.quantity ?? '—'} ${vitaminD?.unit ?? 'units'}); review the remaining operational risks.`}
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 text-xs">
                 <div className="flex items-center gap-2 rounded-lg bg-white/80 border border-red-200/80 p-2 shadow-2xs">
                   <span className="h-2 w-2 rounded-full bg-red-600 shrink-0"></span>
                   <span className="text-slate-700 font-medium truncate">
-                    <strong className="text-red-700">CRITICAL:</strong> Vitamin D reagent below reorder threshold (18 units)
+                    <strong className={vitaminDRisk ? 'text-red-700' : 'text-emerald-700'}>{vitaminDRisk ? 'CRITICAL:' : 'RESOLVED:'}</strong>{' '}
+                    {vitaminDRisk
+                      ? `Vitamin D reagent below reorder threshold (${vitaminD?.quantity ?? '—'} ${vitaminD?.unit ?? 'units'})`
+                      : `Vitamin D stock ${vitaminD?.quantity ?? '—'} ${vitaminD?.unit ?? 'units'}; ${vitaminD?.reorderLevel ?? '—'} ${vitaminD?.unit ?? 'units'} reorder threshold`}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 rounded-lg bg-white/80 border border-amber-200/80 p-2 shadow-2xs">
@@ -372,25 +413,25 @@ export const DashboardView: React.FC = () => {
               </div>
               <div className="text-[11px] text-slate-600">25-OH Vitamin D Reagent (INV-101)</div>
             </div>
-            <span className="text-xs font-bold text-red-700 tabular-nums">4.1 Days Left</span>
+            <span className="text-xs font-bold text-red-700 tabular-nums">{vitaminDDaysRemaining ?? '—'} Days Left</span>
           </div>
 
           <div className="p-3 bg-white rounded-lg border border-red-200/80 space-y-2 text-xs">
             <div className="flex justify-between items-center">
               <span className="text-slate-600">Current Stock</span>
-              <span className="font-bold text-red-600 tabular-nums">18 units</span>
+              <span className="font-bold text-red-600 tabular-nums">{vitaminD ? `${vitaminD.quantity} ${vitaminD.unit}` : '—'}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-600">Reorder Level Threshold</span>
-              <span className="font-bold text-slate-800 tabular-nums">20 units</span>
+              <span className="font-bold text-slate-800 tabular-nums">{vitaminD ? `${vitaminD.reorderLevel} ${vitaminD.unit}` : '—'}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-600">Weekly Consumption</span>
-              <span className="font-bold text-slate-800 tabular-nums">31 units (~4.4/day)</span>
+              <span className="font-bold text-slate-800 tabular-nums">{vitaminD ? `${vitaminD.weeklyConsumption} ${vitaminD.unit}/week` : '—'}</span>
             </div>
             <div className="flex justify-between items-center border-t border-slate-100 pt-1.5">
               <span className="text-slate-600">Supplier Lead Time</span>
-              <span className="font-bold text-slate-800 tabular-nums">4 days (Abbott)</span>
+              <span className="font-bold text-slate-800 tabular-nums">{vitaminD ? `${vitaminD.leadTimeDays} days (${vitaminD.supplier})` : '—'}</span>
             </div>
           </div>
 

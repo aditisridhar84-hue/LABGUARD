@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLabData } from '../context/LabDataContext';
 import { useLanguage } from '../context/LanguageContext';
-import { TraceRecord, TraceStep } from '../types';
+import { TraceAuditEvidence, TraceRecord, TraceStep } from '../types';
 import { X, CheckCircle2, AlertTriangle, XCircle, Search, Terminal, ArrowRight, ShieldCheck, Download, RefreshCw, Layers } from 'lucide-react';
 
 export const InspectTraceModal: React.FC = () => {
@@ -10,6 +10,7 @@ export const InspectTraceModal: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [traceData, setTraceData] = useState<TraceRecord | null>(null);
+  const [traceError, setTraceError] = useState<string | null>(null);
   const [activeStageFilter, setActiveStageFilter] = useState<string>('All');
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
@@ -18,9 +19,15 @@ export const InspectTraceModal: React.FC = () => {
 
     let isMounted = true;
     setLoading(true);
+    setTraceData(null);
+    setTraceError(null);
 
     fetch(`/api/trace/${inspectTraceEntityId}`)
-      .then(res => res.json())
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'The trace service could not load this record.');
+        return data;
+      })
       .then((data: TraceRecord) => {
         if (isMounted) {
           setTraceData(data);
@@ -29,7 +36,10 @@ export const InspectTraceModal: React.FC = () => {
       })
       .catch((err) => {
         console.error('Failed to load trace:', err);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setTraceError(err instanceof Error ? err.message : 'The trace service could not load this record.');
+          setLoading(false);
+        }
       });
 
     return () => {
@@ -132,7 +142,7 @@ export const InspectTraceModal: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-400">Stages Passed: </span>
-                <span className="font-mono text-slate-200">{steps.length} / 9 stages</span>
+                <span className="font-mono text-slate-200">{steps.filter(step => step.status === 'PASSED').length} / {steps.length} stages</span>
               </div>
               <div>
                 <span className="text-slate-400">Timestamp: </span>
@@ -167,12 +177,52 @@ export const InspectTraceModal: React.FC = () => {
               <RefreshCw className="w-6 h-6 animate-spin text-blue-400" />
               <p className="text-xs">Reconstructing pipeline trace from sovereign audit memory...</p>
             </div>
+          ) : traceError ? (
+            <div role="alert" className="py-16 text-center text-rose-300 text-xs">Trace could not be loaded: {traceError}</div>
           ) : !traceData || filteredSteps.length === 0 ? (
             <div className="py-16 text-center text-slate-500 text-xs">
               No trace telemetry recorded for entity {inspectTraceEntityId}.
             </div>
           ) : (
-            filteredSteps.map((step, idx) => {
+            <>
+            {traceData.evidence && (
+              <section aria-label="Persisted trace evidence" className="rounded-xl border border-teal-800/70 bg-teal-950/20 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-teal-300">Persisted operational evidence</h3>
+                  <span className="text-[11px] text-slate-300">Current risk: {traceData.evidence.currentStock.status}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+                    <h4 className="font-semibold text-slate-200">Current stock</h4>
+                    <p className="mt-1 text-slate-300">{traceData.evidence.currentStock.itemName} ({traceData.evidence.currentStock.itemId}): <strong>{traceData.evidence.currentStock.quantity} {traceData.evidence.currentStock.unit}</strong></p>
+                    <p className="text-slate-400">Reorder level: {traceData.evidence.currentStock.reorderLevel} {traceData.evidence.currentStock.unit}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+                    <h4 className="font-semibold text-slate-200">Inventory transaction</h4>
+                    {traceData.evidence.transaction ? <>
+                      <p className="mt-1 font-mono text-teal-300">{traceData.evidence.transaction.id} · {traceData.evidence.transaction.transactionType}</p>
+                      <p className="text-slate-300">{traceData.evidence.transaction.quantity} {traceData.evidence.transaction.unit} · stock after: {traceData.evidence.transaction.remainingQuantity}</p>
+                      <p className="text-slate-400">{traceData.evidence.transaction.reason} · {traceData.evidence.transaction.conductedBy} · {traceData.evidence.transaction.timestamp}</p>
+                    </> : <p className="mt-1 text-slate-400">No persisted restock transaction found.</p>}
+                  </div>
+                  {([
+                    ['Restock audit event', traceData.evidence.restockAudit],
+                    ['Recommendation audit event', traceData.evidence.recommendationAudit]
+                  ] as [string, TraceAuditEvidence | undefined][]).map(([label, event]) => (
+                    <div key={label} className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
+                      <h4 className="font-semibold text-slate-200">{label}</h4>
+                      {event ? <>
+                        <p className="mt-1 font-mono text-teal-300">{event.auditId} · {event.action}</p>
+                        <p className="text-slate-400">{event.recordAffected} · {event.timestamp}</p>
+                        <p className="mt-1 text-slate-300">{event.details}</p>
+                        <p className="mt-2 break-all font-mono text-[10px] text-blue-300">Integrity hash: {event.integrityHash}</p>
+                      </> : <p className="mt-1 text-slate-400">No matching persisted audit event found.</p>}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            {filteredSteps.map((step, idx) => {
               const isExpanded = expandedIndex === idx;
               return (
                 <div
@@ -245,7 +295,8 @@ export const InspectTraceModal: React.FC = () => {
                   )}
                 </div>
               );
-            })
+            })}
+            </>
           )}
         </div>
 
@@ -253,7 +304,7 @@ export const InspectTraceModal: React.FC = () => {
         <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
           <div className="flex items-center space-x-2">
             <ShieldCheck className="w-4 h-4 text-blue-400" />
-            <span>Cryptographically sealed audit trail · Immutable trace</span>
+            <span>Trace rebuilt from server records · Audit entries are hash-chained</span>
           </div>
           <button
             type="button"

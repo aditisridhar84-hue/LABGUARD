@@ -22,6 +22,7 @@ interface Message {
   timestamp: string;
   text?: string;
   structuredResponse?: {
+    mode?: 'groq' | 'deterministic_fallback';
     answer: string;
     evidence: string[];
     recommendedAction: string;
@@ -69,15 +70,11 @@ export const CopilotView: React.FC<CopilotViewProps> = ({ compact = false, onClo
       timestamp: '09:00 AM',
       structuredResponse: {
         answer: getInitialGreeting(),
-        evidence: [
-          "Real-time NovaCare laboratory dataset loaded (1,248 tests processed today)",
-          "Active Reagent Monitoring: 30 monitored lines, ₹8,42,000 inventory value",
-          "Equipment Fleet: 10 analyzers monitored with live utilization telemetry"
-        ],
+        evidence: [],
         recommendedAction: effectiveRole === 'patient'
           ? "Check your diagnostic test order status, review active prescriptions, or verify your OPD appointment time."
           : "Select one of the sample operational queries below or enter a specific inquiry about current reagents, equipment, or queues.",
-        sovereignNotice: "Private Processing Mode · Sovereign AI Governance Layer Active"
+        sovereignNotice: "Responses identify whether Groq or deterministic fallback processing was used."
       }
     }
   ]);
@@ -241,7 +238,7 @@ export const CopilotView: React.FC<CopilotViewProps> = ({ compact = false, onClo
             {compact ? 'LABGUARD Copilot' : 'Smart Lab Copilot'}
           </h1>
           {!compact && <p className="text-xs text-slate-500 mt-0.5">
-            Interrogate private laboratory telemetry with zero clinical diagnosis boundaries. Explainable citations only.
+            Ask about laboratory operations. Each reply identifies whether it used Groq language-model processing or deterministic fallback logic.
           </p>}
         </div>
 
@@ -319,6 +316,11 @@ export const CopilotView: React.FC<CopilotViewProps> = ({ compact = false, onClo
 
                 {/* 1. Answer */}
                 <div className={compact ? '' : 'space-y-1'}>
+                  {resp?.mode && <div className="mb-1">
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${resp.mode === 'groq' ? 'border-violet-200 bg-violet-50 text-violet-800' : 'border-slate-200 bg-slate-100 text-slate-700'}`}>
+                      Response mode · {resp.mode === 'groq' ? 'Groq LLM' : 'Deterministic fallback'}
+                    </span>
+                  </div>}
                   {!compact && <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     Operational Answer
                   </div>}
@@ -373,7 +375,7 @@ export const CopilotView: React.FC<CopilotViewProps> = ({ compact = false, onClo
           <div className="flex justify-start">
             <div className={`flex items-center gap-2 text-xs text-slate-500 ${compact ? '' : 'rounded-xl border border-slate-200 bg-white p-4 shadow-2xs'}`}>
               <Loader2 className="h-4 w-4 animate-spin text-teal-600" />
-              <span>{compact ? 'Thinking...' : 'Analyzing laboratory telemetry and tracing evidence...'}</span>
+              <span>{compact ? 'Preparing response…' : 'Checking operational data and preparing a response…'}</span>
             </div>
           </div>
         )}
@@ -391,7 +393,7 @@ export const CopilotView: React.FC<CopilotViewProps> = ({ compact = false, onClo
               handleSend(inputQuery);
             }
           }}
-          placeholder="Ask an operational question (e.g. 'Why is Vitamin D reagent a risk and what should I do?')"
+          placeholder="Ask about current stock, equipment, queues, or turnaround time."
           disabled={isLoading}
           className={compact
             ? 'w-full rounded-xl border border-teal-200 bg-white py-3.5 pl-4 pr-12 text-xs text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100'

@@ -197,7 +197,40 @@ export interface TraceRecord {
   summary: string;
   status: 'SUCCESS' | 'WARNING' | 'FAILED';
   failedStage?: string;
+  evidence?: TracePersistedEvidence;
   steps: TraceStep[];
+}
+
+export interface TraceAuditEvidence {
+  auditId: string;
+  action: string;
+  recordAffected: string;
+  timestamp: string;
+  details: string;
+  integrityHash: string;
+}
+
+export interface TracePersistedEvidence {
+  currentStock: {
+    itemId: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+    reorderLevel: number;
+    status: string;
+  };
+  transaction?: {
+    id: string;
+    transactionType: string;
+    quantity: number;
+    remainingQuantity: number;
+    unit: string;
+    reason: string;
+    conductedBy: string;
+    timestamp: string;
+  };
+  restockAudit?: TraceAuditEvidence;
+  recommendationAudit?: TraceAuditEvidence;
 }
 
 export interface LaboratoryRecord extends BaseEntity {

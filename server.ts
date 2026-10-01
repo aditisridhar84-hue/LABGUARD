@@ -36,6 +36,22 @@ const PORT = Number(process.env.PORT) || 3000;
 app.use(express.json());
 app.use(attachAuth);
 app.use('/api', apiGuard);
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+  const isEphemeral = req.path === '/copilot' || req.path === '/simulator' || req.path === '/integrations/test-connection';
+  if (!isMutation || isEphemeral) return next();
+
+  const sendJson = res.json.bind(res);
+  res.json = ((body: unknown) => {
+    if (res.statusCode < 400 && !dbEngine.persistPendingChanges()) {
+      res.status(500);
+      return sendJson({ error: 'The server could not confirm that this change was saved to disk. Refresh before retrying.' });
+    }
+    if (res.statusCode < 400) res.setHeader('X-LABGUARD-Persisted', 'true');
+    return sendJson.call(res, body);
+  }) as Response['json'];
+  next();
+});
 registerLabDirectorAuth(app, dbEngine);
 
 // Helper to extract actor from request headers & persistent database
@@ -594,6 +610,9 @@ app.post('/api/inventory', (req: Request, res: Response) => {
 
     const actor = getActor(req);
     const newItem = dbEngine.createInventoryItem(validation.data, actor);
+    if (!dbEngine.persistPendingChanges()) {
+      return res.status(500).json({ error: 'The server could not confirm that the inventory item was saved to disk.' });
+    }
     res.status(201).json(newItem);
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to create inventory item', details: err.message });
@@ -617,6 +636,9 @@ app.post('/api/inventory/:id/restock', (req: Request, res: Response) => {
 
     if (!restocked) {
       return res.status(404).json({ error: `Inventory item ${req.params.id} not found` });
+    }
+    if (!dbEngine.persistPendingChanges()) {
+      return res.status(500).json({ error: 'Inventory changed in memory, but the server could not confirm that it was saved to disk. Refresh before retrying.' });
     }
     res.json(restocked);
   } catch (err: any) {
@@ -1249,9 +1271,21 @@ app.post('/api/recommendations/:id/execute', (req: Request, res: Response) => {
       return res.status(404).json({ error: `Recommendation ${recId} not found` });
     }
 
-    if (recId === 'REC-01') {
-      // Execute Vitamin D Restock
-      dbEngine.restockInventoryItem('INV-101', 30, actor, 'PO-ABBOTT-2026-09');
+    if (recId !== 'REC-01') {
+      return res.status(409).json({ error: 'This recommendation does not have a persisted action workflow yet.' });
+    }
+
+    if (rec.executed) {
+      return res.status(409).json({ error: 'This recommendation has already been executed.' });
+    }
+    if (!detectOperationalRisks().some(risk => risk.riskId === 'RISK-01')) {
+      return res.status(409).json({ error: 'The Vitamin D stock risk is no longer active. Refresh the recommendations before taking action.' });
+    }
+
+    // The demo records a received stock adjustment; it does not dispatch a real supplier order.
+    const restocked = dbEngine.restockInventoryItem('INV-101', 30, actor, 'DEMO-RESTOCK-REC-01');
+    if (!restocked) {
+      return res.status(404).json({ error: 'Vitamin D inventory item INV-101 was not found; no recommendation action was recorded.' });
     }
 
     rec.executed = true;
@@ -1262,10 +1296,13 @@ app.post('/api/recommendations/:id/execute', (req: Request, res: Response) => {
       action: 'Recommendation Executed',
       dataset: 'AI Action Center',
       recordAffected: recId,
-      details: `Executed recommendation: "${rec.title}" -> ${rec.recommendedAction}`
+      details: `Demo restock recorded for ${rec.title}: +30 ${restocked.unit} received units added to inventory. No supplier order was transmitted.`
     });
 
     dbEngine.scheduleSave();
+    if (!dbEngine.persistPendingChanges()) {
+      return res.status(500).json({ error: 'The action changed server memory, but the server could not confirm that the restock and audit record were saved to disk. Refresh before retrying.' });
+    }
     res.json({ success: true, recommendation: rec });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to execute recommendation', details: err.message });
@@ -1384,7 +1421,7 @@ app.post('/api/simulator', (req: Request, res: Response) => {
 // ==========================================
 app.get('/api/audit', (req: Request, res: Response) => {
   try {
-    const { action, dataset, limit = '100' } = req.query;
+    const { action, dataset, search, limit = '100' } = req.query;
     let logs = dbEngine.getCollection('auditLogs');
 
     if (action && typeof action === 'string' && action !== 'All') {
@@ -1395,7 +1432,15 @@ app.get('/api/audit', (req: Request, res: Response) => {
       logs = logs.filter(l => l.dataset === dataset);
     }
 
-    res.json(logs.slice(0, parseInt(limit as string, 10)));
+    if (search && typeof search === 'string' && search.trim()) {
+      const term = search.trim().toLowerCase();
+      logs = logs.filter(l => [l.auditId, l.user, l.action, l.dataset, l.recordAffected, l.details, l.integrityHash]
+        .some(value => String(value || '').toLowerCase().includes(term)));
+    }
+
+    res.setHeader('X-Audit-Total', String(logs.length));
+    const parsedLimit = Number.parseInt(String(limit), 10);
+    res.json(logs.slice(0, Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 100));
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch audit log', details: err.message });
   }

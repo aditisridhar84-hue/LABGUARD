@@ -10,6 +10,9 @@ export const EquipmentView: React.FC = () => {
   const [selectedEquipForPM, setSelectedEquipForPM] = useState<EquipmentRecord | null>(null);
   const [pmDate, setPmDate] = useState('2026-04-10');
   const [pmEngineer, setPmEngineer] = useState('Kunal Deshmukh (Roche Certified Lead)');
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [mutationSuccess, setMutationSuccess] = useState<string | null>(null);
+  const [savingAction, setSavingAction] = useState(false);
 
   // New Equipment Form
   const [newEquip, setNewEquip] = useState({
@@ -23,14 +26,30 @@ export const EquipmentView: React.FC = () => {
   const handleMaintenanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEquipForPM) return;
-    await scheduleEquipmentMaintenance(selectedEquipForPM.equipmentId, pmDate, pmEngineer, 'Rescheduled to prevent peak shift collision');
-    setSelectedEquipForPM(null);
+    setSavingAction(true);
+    setMutationError(null);
+    setMutationSuccess(null);
+    try {
+      const result = await scheduleEquipmentMaintenance(selectedEquipForPM.equipmentId, pmDate, pmEngineer, 'Rescheduled to prevent peak shift collision');
+      if (result.success) {
+        setSelectedEquipForPM(null);
+        setMutationSuccess('Maintenance schedule saved to the laboratory record.');
+      } else setMutationError(result.error || 'Could not save maintenance schedule.');
+    } finally { setSavingAction(false); }
   };
 
   const handleAddEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createEquipment(newEquip);
-    setShowAddModal(false);
+    setSavingAction(true);
+    setMutationError(null);
+    setMutationSuccess(null);
+    try {
+      const result = await createEquipment(newEquip);
+      if (result.success) {
+        setShowAddModal(false);
+        setMutationSuccess('Equipment registration saved to the laboratory record.');
+      } else setMutationError(result.error || 'Could not register equipment.');
+    } finally { setSavingAction(false); }
   };
 
   const filteredEquipment = equipment.filter((e) => {
@@ -168,6 +187,7 @@ export const EquipmentView: React.FC = () => {
       </div>
 
       {/* Schedule Maintenance Modal */}
+      {mutationSuccess && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{mutationSuccess}</div>}
       {selectedEquipForPM && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -182,6 +202,7 @@ export const EquipmentView: React.FC = () => {
             </div>
 
             <form onSubmit={handleMaintenanceSubmit} className="p-5 space-y-3.5 text-xs">
+              {mutationError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{mutationError}</div>}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Target Maintenance Date</label>
                 <input
@@ -218,9 +239,10 @@ export const EquipmentView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold transition-colors"
+                  disabled={savingAction}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
                 >
-                  Confirm & Schedule
+                  {savingAction ? 'Saving…' : 'Confirm & Schedule'}
                 </button>
               </div>
             </form>
@@ -243,6 +265,7 @@ export const EquipmentView: React.FC = () => {
             </div>
 
             <form onSubmit={handleAddEquipment} className="p-5 space-y-3.5 text-xs">
+              {mutationError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{mutationError}</div>}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Analyzer Name</label>
                 <input
@@ -303,9 +326,10 @@ export const EquipmentView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold transition-colors"
+                  disabled={savingAction}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
                 >
-                  Register Fleet Unit
+                  {savingAction ? 'Saving…' : 'Register Fleet Unit'}
                 </button>
               </div>
             </form>

@@ -57,6 +57,8 @@ export const PatientPortalView: React.FC = () => {
   const [appointmentDate, setAppointmentDate] = useState(new Date().toISOString().split('T')[0]);
   const [timeSlot, setTimeSlot] = useState('10:00 AM - 10:30 AM');
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookingSaving, setBookingSaving] = useState(false);
 
   // Authoritative UHID computation
   const targetUhid = currentUser?.patientId || currentUser?.uhid || patientRecord?.patientId || '';
@@ -145,28 +147,41 @@ export const PatientPortalView: React.FC = () => {
 
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBookingSaving(true);
+    setBookingError(null);
+    setBookingSuccess(null);
     const docList = doctors || [];
     const doc = docList.find(d => d.doctorId === selectedDoctorId || d.id === selectedDoctorId) || docList[0];
-    if (!doc) return;
+    if (!doc) {
+      setBookingError('No consulting doctor is available to book.');
+      setBookingSaving(false);
+      return;
+    }
 
-    const res = await createAppointment({
-      doctorId: doc.doctorId,
-      doctorName: doc.name,
-      department: doc.department,
-      patientId: pInfo.patientId,
-      patientName: pInfo.name,
-      date: appointmentDate,
-      timeSlot,
-      consultationType: 'REGULAR'
-    });
+    try {
+      const res = await createAppointment({
+        doctorId: doc.doctorId,
+        doctorName: doc.name,
+        department: doc.department,
+        patientId: pInfo.patientId,
+        patientName: pInfo.name,
+        date: appointmentDate,
+        timeSlot,
+        consultationType: 'REGULAR'
+      });
 
-    if (res.success) {
-      setBookingSuccess(`Your OPD Appointment is confirmed! Token Number: ${res.appointment?.tokenNumber || 'T-Next'}`);
-      fetchMyRecord();
-      setTimeout(() => {
-        setBookModalOpen(false);
-        setBookingSuccess(null);
-      }, 2500);
+      if (res.success) {
+        setBookingSuccess(`Your OPD Appointment is saved! Token Number: ${res.appointment?.tokenNumber || 'T-Next'}`);
+        fetchMyRecord();
+        setTimeout(() => {
+          setBookModalOpen(false);
+          setBookingSuccess(null);
+        }, 2500);
+      } else {
+        setBookingError(res.error || 'Appointment was not saved. Please try again.');
+      }
+    } finally {
+      setBookingSaving(false);
     }
   };
 
@@ -659,6 +674,7 @@ export const PatientPortalView: React.FC = () => {
                   {bookingSuccess}
                 </div>
               )}
+              {bookingError && <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl font-medium border border-rose-200">{bookingError}</div>}
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Select Consulting Specialist</label>
@@ -711,9 +727,10 @@ export const PatientPortalView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow-md shadow-emerald-700/20"
+                  disabled={bookingSaving}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold shadow-md shadow-emerald-700/20 disabled:opacity-50"
                 >
-                  Confirm OPD Booking
+                  {bookingSaving ? 'Saving…' : 'Confirm OPD Booking'}
                 </button>
               </div>
             </form>

@@ -8,12 +8,14 @@ import { Bot, X } from 'lucide-react';
 import { LabDataProvider, useLabData } from './context/LabDataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { DemoWalkthroughBar } from './components/DemoWalkthroughBar';
 import { LandingScreen } from './components/LandingScreen';
-import LabDirectorLogin, { LOGIN_ROLES, RoleSelectionLogin } from './pages/login/LabDirectorLogin';
+import LabDirectorLogin, { RoleSelectionLogin } from './pages/login/LabDirectorLogin';
+import { LOGIN_ROLES } from './pages/login/loginRoles';
 import { UserProfileModal } from './components/UserProfileModal';
 import { InspectTraceModal } from './components/InspectTraceModal';
 
@@ -49,13 +51,12 @@ import { UploadDataView } from './components/UploadDataView';
 import { DataGovernanceView } from './components/DataGovernanceView';
 import { ImpactDashboardView } from './components/ImpactDashboardView';
 import { IntegrationCenterView } from './components/IntegrationCenterView';
-import { useLanguage } from './context/LanguageContext';
 
 const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab } = useLabData();
   const { currentUser, effectiveRole } = useAuth();
-  const { language } = useLanguage();
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const canUseCopilot = currentUser?.permissions?.includes('ai:use') === true;
 
   useEffect(() => {
     const initialTab: Record<string, string> = {
@@ -259,55 +260,58 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
+    <div className="h-dvh max-h-dvh overflow-hidden bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
       <Navbar />
-      <DemoWalkthroughBar />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div key={`${activeTab}-${language}`} className="max-w-7xl mx-auto">
-            {renderActiveView()}
-          </div>
-        </main>
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <DemoWalkthroughBar />
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-7xl">
+              {renderActiveView()}
+            </div>
+          </main>
+        </section>
       </div>
 
       {/* Persistent Global Modals */}
       <UserProfileModal />
       <InspectTraceModal />
 
-      <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
-        <section
-          id="copilot-widget-panel"
-          role="dialog"
-          aria-label="LABGUARD Copilot"
-          aria-hidden={!isCopilotOpen}
-          hidden={!isCopilotOpen}
-          className="h-[min(44rem,calc(100dvh-6.5rem))] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-teal-200 bg-white shadow-[0_24px_60px_-20px_rgba(15,118,110,0.4)]"
-        >
-          <ErrorBoundary sectionName="Smart Lab Copilot">
-            <CopilotView compact onClose={() => setIsCopilotOpen(false)} />
-          </ErrorBoundary>
-        </section>
-        <button
-          type="button"
-          onClick={() => setIsCopilotOpen(open => !open)}
-          aria-label={isCopilotOpen ? 'Close LABGUARD Copilot' : 'Open LABGUARD Copilot'}
-          aria-expanded={isCopilotOpen}
-          aria-controls="copilot-widget-panel"
-          title={isCopilotOpen ? 'Close Copilot' : 'Open Copilot'}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-white shadow-lg transition-colors hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
-        >
-          {isCopilotOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
-        </button>
-      </div>
+      {canUseCopilot && (
+        <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+          <section
+            id="copilot-widget-panel"
+            role="dialog"
+            aria-label="LABGUARD Copilot"
+            aria-hidden={!isCopilotOpen}
+            hidden={!isCopilotOpen}
+            className="h-[min(44rem,calc(100dvh-6.5rem))] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-teal-200 bg-white shadow-[0_24px_60px_-20px_rgba(15,118,110,0.4)]"
+          >
+            <ErrorBoundary sectionName="Smart Lab Copilot">
+              <CopilotView compact onClose={() => setIsCopilotOpen(false)} />
+            </ErrorBoundary>
+          </section>
+          <button
+            type="button"
+            onClick={() => setIsCopilotOpen(open => !open)}
+            aria-label={isCopilotOpen ? 'Close LABGUARD Copilot' : 'Open LABGUARD Copilot'}
+            aria-expanded={isCopilotOpen}
+            aria-controls="copilot-widget-panel"
+            title={isCopilotOpen ? 'Close Copilot' : 'Open Copilot'}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-700 text-white shadow-lg transition-colors hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-300"
+          >
+            {isCopilotOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
-const AppContent: React.FC = () => {
+const AppContent: React.FC<{ onEnter: () => void; onChooseRole: () => void }> = ({ onEnter, onChooseRole }) => {
   const { currentUser, isAuthLoading } = useAuth();
-  const [showLanding, setShowLanding] = useState(false);
 
   if (isAuthLoading) {
     return (
@@ -323,37 +327,64 @@ const AppContent: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <RoleSelectionLogin />;
-  }
-
-  if (showLanding) {
-    return <LandingScreen onEnter={() => setShowLanding(false)} />;
+    return (
+      <LandingScreen
+        onEnter={onEnter}
+        onChooseRole={onChooseRole}
+      />
+    );
   }
 
   return (
     <ErrorBoundary sectionName="Application Shell">
-      <MainLayout />
+      <LabDataProvider>
+        <MainLayout />
+      </LabDataProvider>
     </ErrorBoundary>
   );
 };
 
-export default function App() {
-  const pathname = window.location.pathname;
+const AppRouter: React.FC = () => {
+  const { refreshSession } = useAuth();
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  const navigate = (path: string) => {
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setPathname(path);
+  };
+
+  useEffect(() => {
+    const syncPath = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', syncPath);
+    return () => window.removeEventListener('popstate', syncPath);
+  }, []);
+
+  const finishSignIn = async () => {
+    const authenticated = await refreshSession();
+    if (!authenticated) {
+      throw new Error('Sign-in succeeded, but the authenticated session could not be loaded. Please try again.');
+    }
+    navigate('/');
+  };
+
   const loginPath = pathname.replace(/^\/login\/?/, '');
   const loginRole = LOGIN_ROLES.find((item) => item.path === loginPath);
 
-  if (pathname === '/login' || pathname === '/login/') return <RoleSelectionLogin />;
-  if (loginRole) return <LabDirectorLogin role={loginRole.role} />;
+  if (pathname === '/login' || pathname === '/login/') return <RoleSelectionLogin onNavigate={navigate} />;
+  if (loginRole) return <LabDirectorLogin role={loginRole.role} onNavigate={navigate} onSuccess={finishSignIn} />;
 
+  return <AppContent onEnter={() => navigate('/login/laboratory-director')} onChooseRole={() => navigate('/login')} />;
+};
+
+export default function App() {
   return (
     <ErrorBoundary sectionName="Hospital Infrastructure Engine">
-      <LanguageProvider>
-        <AuthProvider>
-          <LabDataProvider>
-            <AppContent />
-          </LabDataProvider>
-        </AuthProvider>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <AppRouter />
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

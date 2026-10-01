@@ -141,10 +141,9 @@ export function detectOperationalRisks(): AIRisk[] {
       actionType: 'restock',
       confidence: 98.4,
       factors: [
-        'Physical stock at 18 units (Threshold: 20 units)',
-        '30-day verified burn rate: 31 units/week (~4.4 units/day)',
-        'Supplier turnaround time: 4 days from Abbott India',
-        'Impact: 140+ outpatient wellness and endocrinology orders at risk'
+        `Physical stock at ${vitD.quantity} ${vitD.unit} (Reorder threshold: ${vitD.reorderLevel} ${vitD.unit})`,
+        `Recorded consumption: ${vitD.weeklyConsumption} ${vitD.unit}/week`,
+        `Supplier fulfillment lead time: ${vitD.leadTimeDays} days from ${vitD.supplier}`
       ]
     });
   }
@@ -239,20 +238,25 @@ export function generateRecommendations(): AIRecommendation[] {
   const inventory = dbEngine.getCollection('inventory');
   const vitD = inventory.find(i => i.itemId === 'INV-101');
 
-  return recommendations.map(rec => {
+  return recommendations
+    .filter(rec => rec.recId !== 'REC-01' || !vitD || vitD.quantity <= vitD.reorderLevel || rec.executed)
+    .map(rec => {
     if (rec.recId === 'REC-01' && vitD) {
+      const daysRemaining = Number(((vitD.quantity / (vitD.weeklyConsumption || 31)) * 7).toFixed(1));
       return {
         ...rec,
+        problem: `Stock is ${vitD.quantity} ${vitD.unit} against a ${vitD.reorderLevel} ${vitD.unit} reorder threshold, with consumption of ${vitD.weeklyConsumption} ${vitD.unit}/week.`,
+        evidence: `Current inventory is ${vitD.quantity} ${vitD.unit}; supplier lead time is ${vitD.leadTimeDays} days. Estimated stock coverage is ${daysRemaining} days at the recorded consumption rate.`,
         supportingData: {
           'Current Physical Stock': `${vitD.quantity} ${vitD.unit}`,
           'Safety Reorder Threshold': `${vitD.reorderLevel} ${vitD.unit}`,
           'Weekly Burn Rate': `${vitD.weeklyConsumption} units/week`,
-          'Projected Stock-out': '4.1 days',
+          'Projected Stock-out': `${daysRemaining} days`,
           'Vendor Lead Time': `${vitD.leadTimeDays} business days`,
           'Recommended Order': '30 units (Batch VD-2026-B884)'
         }
       };
     }
     return rec;
-  });
+    });
 }

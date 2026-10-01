@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Lightbulb, 
   CheckCircle2, 
@@ -13,7 +13,29 @@ import { useLabData } from '../context/LabDataContext';
 import { AIRecommendation } from '../types';
 
 export const RecommendationsView: React.FC = () => {
-  const { recommendations, executeRecommendation, setActiveTab } = useLabData();
+  const { recommendations, executeRecommendation, setActiveTab, openInspectTrace } = useLabData();
+  const [executingId, setExecutingId] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<Record<string, { kind: 'success' | 'error'; message: string }>>({});
+
+  const handleExecute = async (recId: string) => {
+    if (recId !== 'REC-01') return;
+    if (!window.confirm('Record a demo receipt of 30 Vitamin D reagent units in inventory? This updates the local LABGUARD database; it does not send a supplier order.')) return;
+
+    setExecutingId(recId);
+    setActionFeedback(prev => {
+      const next = { ...prev };
+      delete next[recId];
+      return next;
+    });
+    const result = await executeRecommendation(recId);
+    setActionFeedback(prev => ({
+      ...prev,
+      [recId]: result.success
+        ? { kind: 'success', message: 'Saved on the server: +30 received units, recommendation status, inventory transaction, and audit entries.' }
+        : { kind: 'error', message: `Not confirmed as saved: ${result.error || 'The server did not complete this action.'}` }
+    }));
+    setExecutingId(null);
+  };
 
   const getPriorityBadge = (priority: AIRecommendation['priority']) => {
     switch (priority) {
@@ -136,10 +158,17 @@ export const RecommendationsView: React.FC = () => {
 
                 <div className="flex items-center gap-2 shrink-0">
                   <button
-                    onClick={() => executeRecommendation(rec.recId)}
-                    disabled={rec.executed}
+                    type="button"
+                    onClick={() => openInspectTrace(rec.recId)}
+                    className="px-3 py-2 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg"
+                  >
+                    Inspect Trace
+                  </button>
+                  <button
+                    onClick={() => void handleExecute(rec.recId)}
+                    disabled={rec.executed || rec.recId !== 'REC-01' || executingId === rec.recId}
                     className={`px-4 py-2 text-xs font-bold rounded-lg shadow-xs transition-all flex items-center gap-1.5 ${
-                      rec.executed
+                      rec.executed || rec.recId !== 'REC-01' || executingId === rec.recId
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                         : 'bg-teal-700 hover:bg-teal-800 text-white'
                     }`}
@@ -147,17 +176,31 @@ export const RecommendationsView: React.FC = () => {
                     {rec.executed ? (
                       <>
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>Action Completed ✓</span>
+                        <span>{rec.recId === 'REC-01' ? 'Demo Restock Recorded' : 'Action Completed ✓'}</span>
                       </>
+                    ) : rec.recId !== 'REC-01' ? (
+                      <span>No saved action connected</span>
+                    ) : executingId === rec.recId ? (
+                      <span>Saving…</span>
                     ) : (
                       <>
                         <Sparkles className="h-3.5 w-3.5" />
-                        <span>{rec.actionLabel}</span>
+                        <span>Confirm Demo Restock (+30)</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
+              {rec.recId === 'REC-01' && (
+                <p className="mt-3 text-[11px] text-slate-500">
+                  Demo action: records received stock in the local LABGUARD database. No supplier purchase order is sent.
+                </p>
+              )}
+              {actionFeedback[rec.recId] && (
+                <p role={actionFeedback[rec.recId].kind === 'error' ? 'alert' : 'status'} className={`mt-3 rounded-lg border px-3 py-2 text-xs ${actionFeedback[rec.recId].kind === 'success' ? 'border-teal-200 bg-teal-50 text-teal-900' : 'border-red-200 bg-red-50 text-red-800'}`}>
+                  {actionFeedback[rec.recId].message}
+                </p>
+              )}
             </div>
           );
         })}

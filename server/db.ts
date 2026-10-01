@@ -102,6 +102,7 @@ class DatabaseEngine extends EventEmitter {
   private db: DatabaseSchema;
   private saveTimeout: NodeJS.Timeout | null = null;
   private isSaving = false;
+  private hasPendingChanges = false;
   private otpStore: Map<string, { code: string; expiresAt: number; attempts: number; lastRequestedAt: number; userType: string }> = new Map();
 
   constructor() {
@@ -623,23 +624,39 @@ class DatabaseEngine extends EventEmitter {
   }
 
   public scheduleSave() {
+    this.hasPendingChanges = true;
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
     }
 
     this.saveTimeout = setTimeout(() => {
-      this.persistToDisk();
+      this.saveTimeout = null;
+      if (!this.persistToDisk()) {
+        console.error('[DB] Changes remain pending after the scheduled save failed.');
+      }
     }, 300);
   }
 
-  private persistToDisk() {
-    if (this.isSaving) return;
+  public persistPendingChanges(): boolean {
+    if (!this.hasPendingChanges) return true;
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+    return this.persistToDisk();
+  }
+
+  private persistToDisk(): boolean {
+    if (this.isSaving) return false;
     this.isSaving = true;
     try {
       const data = JSON.stringify(this.db, null, 2);
       fs.writeFileSync(DB_FILE, data, 'utf-8');
+      this.hasPendingChanges = false;
+      return true;
     } catch (err) {
       console.error('[DB] Error saving to disk:', err);
+      return false;
     } finally {
       this.isSaving = false;
     }
@@ -1023,20 +1040,11 @@ class DatabaseEngine extends EventEmitter {
       quantity: quantityToAdd,
       remainingQuantity: newQty,
       unit: after.unit,
-      reason: `Replenishment order fulfilled ${poNumber ? `(PO: ${poNumber})` : ''}`,
+      reason: `Replenishment recorded ${poNumber ? `(reference: ${poNumber})` : ''}`,
       conductedBy: actor.user || 'Store Manager',
       timestamp: now.replace('T', ' ').substring(0, 19)
     };
     this.db.inventoryTransactions.unshift(txn);
-
-    // If restocking Vitamin D, resolve recommendation REC-01
-    if (itemId === 'INV-101') {
-      const rec = this.db.recommendations.find(r => r.recId === 'REC-01');
-      if (rec) {
-        rec.executed = true;
-        rec.executedAt = now;
-      }
-    }
 
     this.logAudit({
       ...actor,

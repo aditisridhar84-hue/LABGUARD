@@ -19,10 +19,14 @@ export const TestOrdersView: React.FC = () => {
   const [department, setDepartment] = useState<Department>('Hematology');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<{ message: string; error: boolean } | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    setCreateSuccess(null);
     setIsSubmitting(true);
 
     const pat = patients.find(p => p.patientId === selectedPatientId);
@@ -43,6 +47,7 @@ export const TestOrdersView: React.FC = () => {
         setIsSubmitting(false);
         return;
       }
+      setCreateSuccess('Test order saved to the server.');
       setShowCreateModal(false);
     } finally {
       setIsSubmitting(false);
@@ -51,7 +56,14 @@ export const TestOrdersView: React.FC = () => {
 
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
     setActiveMenuOrderId(null);
-    await updateOrderStatus(orderId, nextStatus);
+    setUpdatingOrderId(orderId);
+    setStatusFeedback(null);
+    try {
+      const res = await updateOrderStatus(orderId, nextStatus);
+      setStatusFeedback({ message: res.success ? `Order ${orderId} saved as ${nextStatus}.` : (res.error || 'Order update failed.'), error: !res.success });
+    } finally {
+      setUpdatingOrderId(null);
+    }
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -177,7 +189,14 @@ export const TestOrdersView: React.FC = () => {
         </div>
       </div>
 
+      {statusFeedback && (
+        <div role="status" className={`rounded-lg border px-3 py-2 text-xs ${statusFeedback.error ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+          {statusFeedback.message}
+        </div>
+      )}
+
       {/* Orders Table */}
+      {createSuccess && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{createSuccess}</div>}
       <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -207,10 +226,11 @@ export const TestOrdersView: React.FC = () => {
                   <td className="px-3.5 py-2 text-slate-600 font-mono text-[11px]">{o.assignedEquipment || 'Bench 1'}</td>
                   <td className="px-3.5 py-2 text-right relative">
                     <button
+                      disabled={updatingOrderId === o.orderId}
                       onClick={() => setActiveMenuOrderId(activeMenuOrderId === o.orderId ? null : o.orderId)}
                       className="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 text-[11px] font-semibold text-slate-700 inline-flex items-center gap-1 transition-colors"
                     >
-                      <span>Advance</span>
+                      <span>{updatingOrderId === o.orderId ? 'Saving…' : 'Advance'}</span>
                       <ChevronDown className="w-3 h-3 text-slate-400" />
                     </button>
 
