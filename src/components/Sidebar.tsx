@@ -14,7 +14,6 @@ import {
   AlertOctagon,
   Lightbulb,
   SlidersHorizontal,
-  Bot,
   ShieldAlert,
   Binary,
   ScrollText,
@@ -114,7 +113,6 @@ export const Sidebar: React.FC = () => {
     ...(can('analytics:read') ? [{ id: 'risk-center', label: t('navRiskCenter'), icon: AlertOctagon, badge: criticalRisksCount, badgeColor: 'red' as const }] : []),
     ...(can('analytics:read') && can('inventory:write') ? [{ id: 'recommendations', label: t('navRecommendations'), icon: Lightbulb }] : []),
     ...(can('analytics:read') ? [{ id: 'what-if', label: t('navSimulator'), icon: SlidersHorizontal }] : []),
-    ...(can('ai:use') ? [{ id: 'copilot', label: t('navCopilot'), icon: Bot }] : []),
   ];
 
   const sovereignNav: NavItem[] = isPatient ? [] : [

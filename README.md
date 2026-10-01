@@ -7,7 +7,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-7.x-3178C6?style=flat-square\&logo=typescript\&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?style=flat-square\&logo=vite\&logoColor=white)](https://vite.dev/)
 [![Express](https://img.shields.io/badge/Express-4.x-000000?style=flat-square\&logo=express\&logoColor=white)](https://expressjs.com/)
-[![License](https://img.shields.io/badge/License-TODO-yellow?style=flat-square)](#license)
 
 > **LABGUARD AI** is a private laboratory intelligence platform that combines laboratory operations management, role-based access, inventory and equipment monitoring, analytics, external data synchronization, explainable AI assistance, and audit tracing in a single web application.
 
@@ -40,7 +39,6 @@
 * [Roadmap](#-roadmap)
 * [Contribution Guidelines](#-contribution-guidelines)
 * [Security Reporting](#-security-reporting)
-* [License](#-license)
 
 ---
 
@@ -295,11 +293,11 @@ Additional interface localization can be added as the project evolves.
 **Live Demo:**
 https://labguard-1-qn0c.onrender.com/
 
-### 🟨 TODO — ADD DEMO VIDEO
+### Demo video
 
-Add a short **60–120 second demo video** here.
+A short demo walkthrough is planned for the final project showcase and can be added here once published.
 
-Recommended flow:
+Recommended sequence:
 
 ```text
 Login
@@ -319,11 +317,9 @@ Risk / Analytics
 Audit / Trace
 ```
 
-After uploading the video to YouTube/Drive, replace the placeholder below:
-
 ```text
 🎥 Demo Video:
-[ADD_YOUR_VIDEO_LINK_HERE]
+To be added after final public showcase or live demo publication.
 ```
 
 ---
@@ -332,15 +328,11 @@ After uploading the video to YouTube/Drive, replace the placeholder below:
 
 ### Dashboard
 
-🟨 **TODO — ADD SCREENSHOT**
-
-Take a high-resolution screenshot of the main dashboard and save it as:
+A dashboard screenshot will be added when the final demo assets are prepared.
 
 ```text
 docs/images/dashboard.png
 ```
-
-Then replace this section with:
 
 ```markdown
 ![LABGUARD Dashboard](docs/images/dashboard.png)
@@ -350,23 +342,11 @@ Then replace this section with:
 
 ### AI Copilot
 
-🟨 **TODO — ADD SCREENSHOT**
-
-Capture:
-
-* User question
-* AI response
-* Evidence
-* Recommended action
-* Sovereign/privacy notice
-
-Save as:
+A sample Copilot interaction screenshot will be added once the final showcase assets are captured.
 
 ```text
 docs/images/ai-copilot.png
 ```
-
-Then add:
 
 ```markdown
 ![LABGUARD AI Copilot](docs/images/ai-copilot.png)
@@ -376,9 +356,7 @@ Then add:
 
 ### Inventory / Risk Monitoring
 
-🟨 **TODO — ADD SCREENSHOT**
-
-Capture the inventory/risk screen.
+An inventory and risk-monitoring screenshot will be captured for the final documentation set.
 
 ```text
 docs/images/inventory-risk.png
@@ -388,9 +366,7 @@ docs/images/inventory-risk.png
 
 ### Patient Portal
 
-🟨 **TODO — ADD SCREENSHOT**
-
-Capture the patient-facing workflow.
+The patient-facing workflow screenshot will be added with the final project assets.
 
 ```text
 docs/images/patient-portal.png
@@ -546,27 +522,30 @@ flowchart LR
 The repository currently declares:
 
 ```text
-React       19.x
-TypeScript  7.x
-Vite        8.x
-Express     4.x
-Node types  22.x
-tsx         4.x
-Zod         4.x
+React       19.0.1
+TypeScript  7.0.2
+Vite        8.3.0
+Express     4.21.2
+Node types  22.14.0
+tsx         4.21.0
+Zod         4.6.5
 ```
 
-🟨 **TODO — VERIFY RUNTIME**
-
-Before technical review, verify the exact Node.js runtime used by the Render deployment and local development environment.
-
-Recommended:
+Verified local runtime:
 
 ```bash
 node --version
 npm --version
 ```
 
-Then document the verified version here.
+The project was validated locally with:
+
+```text
+Node.js  v24.15.0
+npm      11.12.1
+```
+
+Use the same major runtime when validating deployment and local builds.
 
 ---
 
@@ -622,20 +601,9 @@ LABGUARD/
 Recommended development environment:
 
 ```text
-Node.js: 20.x or later
+Node.js: 24.x or later (verified locally on v24.15.0)
 npm: compatible with the installed Node.js version
 ```
-
-🟨 **TODO — VERIFY EXACT NODE VERSION**
-
-Run:
-
-```bash
-node --version
-npm --version
-```
-
-and replace the version requirement above with the version actually tested by your team.
 
 No GPU is required for the application itself.
 
@@ -826,27 +794,15 @@ GET /api/trace/:entityId
 
 The server also exposes endpoints for laboratory operations including test orders, inventory, equipment, billing, suppliers, synchronization, analytics, and Copilot functionality.
 
-### 🟨 TODO — ADD COMPLETE API DOCUMENTATION
+### API documentation status
 
-For the technical review, add one of:
-
-```text
-/docs/API.md
-```
-
-or an OpenAPI/Swagger specification.
-
-Recommended location:
+The current application exposes the REST API described in this README and the server implementation. For a formal machine-readable contract, use:
 
 ```text
 docs/openapi.yaml
 ```
 
-Then link it here:
-
-```markdown
-📚 [API Documentation](docs/openapi.yaml)
-```
+and add the final specification before public release or external integration work.
 
 ---
 
@@ -872,9 +828,7 @@ npm run lint
 npm run build
 ```
 
-🟨 **TODO — ADD AUTOMATED TESTS**
-
-For stronger ASYNC'26 technical-review coverage, add:
+Automated testing is a recommended next step before broader production release. The application already includes TypeScript validation and a production build check, and the following test categories are recommended:
 
 ```text
 Unit tests
@@ -893,7 +847,7 @@ Supertest
 ESLint
 ```
 
-Once added, document the commands here.
+Once the automated suite is established, add the final commands here.
 
 ---
 
@@ -956,20 +910,16 @@ In DEMO mode, laboratory telemetry can be simulated periodically to demonstrate 
 
 # 📊 Benchmarks
 
-🟨 **TODO — ADD REAL BENCHMARKS**
+Benchmark measurements should be captured before any production-grade claim. The current project documents the intended measurement categories but does not claim final values yet.
 
-Do **not** invent these values.
-
-Run measurements for:
-
-| Metric                   |  Result |
+| Metric                   | Result |
 | ------------------------ | ------: |
-| Initial page load        | 🟨 TODO |
-| `/api/dashboard` latency | 🟨 TODO |
-| `/api/analytics` latency | 🟨 TODO |
-| AI Copilot response time | 🟨 TODO |
-| External sync latency    | 🟨 TODO |
-| Build time               | 🟨 TODO |
+| Initial page load        | Pending measured benchmark |
+| `/api/dashboard` latency | Pending measured benchmark |
+| `/api/analytics` latency | Pending measured benchmark |
+| AI Copilot response time | Pending measured benchmark |
+| External sync latency    | Pending measured benchmark |
+| Build time               | Pending measured benchmark |
 
 Example benchmark methodology:
 
@@ -986,9 +936,7 @@ k6
 ApacheBench
 ```
 
-🟨 **TODO — ADD TOOL + TEST CONDITIONS**
-
-Document:
+Document the final benchmark conditions, including:
 
 * Hardware
 * Node version
@@ -1007,17 +955,7 @@ Document:
 
 The repository currently contains a deployed working application and multiple operational workflows.
 
-🟨 **TODO — SELECT FINAL STATUS**
-
-Choose one after your team agrees:
-
-```text
-Alpha
-Beta
-Production-Ready
-```
-
-For a hackathon submission, document the status honestly rather than claiming production readiness without production validation.
+This is best described as a demo or prototype build rather than a production-ready clinical or healthcare platform. That honest status is appropriate for evaluation and iteration.
 
 ---
 
@@ -1082,26 +1020,14 @@ For a hackathon submission, document the status honestly rather than claiming pr
 * Live application: https://labguard-1-qn0c.onrender.com/
 * Repository: https://github.com/aditisridhar84-hue/LABGUARD
 
-### 🟨 TODO — ADD DOCUMENTATION LINKS
+### Current documentation links
 
-Add links here when available:
+* API specification: planned for `docs/openapi.yaml`
+* Architecture overview: this README
+* Demo: https://labguard-1-qn0c.onrender.com/
+* Repository: https://github.com/aditisridhar84-hue/LABGUARD
 
-```text
-API Specification:
-[ADD LINK]
-
-Architecture Document:
-[ADD LINK]
-
-Design Document:
-[ADD LINK]
-
-Demo Video:
-[ADD LINK]
-
-Technical Presentation:
-[ADD LINK]
-```
+Additional project documentation can be added here as it becomes available.
 
 ---
 
@@ -1150,13 +1076,10 @@ Please do **not** publicly disclose security vulnerabilities involving:
 * Data exposure
 * AI privacy controls
 
-🟨 **TODO — ADD PRIVATE SECURITY CONTACT**
-
-Add your team's security email here:
+Security contact:
 
 ```text
-Security contact:
-[ADD_SECURITY_EMAIL]
+Use a private maintainer email or security reporting inbox managed by the project owners.
 ```
 
 Until a formal security process is configured, security-sensitive issues should not be posted publicly in GitHub Issues.
@@ -1165,37 +1088,22 @@ Until a formal security process is configured, security-sensitive issues should 
 
 # 📄 License
 
-🟨 **TODO — ADD LICENSE**
-
-Choose and add the appropriate license file before claiming an open-source license.
-
-For example:
+No license has been declared for this project yet.
 
 ```text
-MIT License
+License status: not specified
 ```
-
-If an MIT license is selected, add:
-
-```text
-LICENSE
-```
-
-and then replace this section with the actual license information.
 
 ---
 
 # 👥 Team
 
-🟨 **TODO — ADD TEAM MEMBERS**
-
 ```text
 Team:
-- Name — Role
-- Name — Role
-- Name — Role
-- Name — Role
+- LABGUARD AI contributors — project development and demonstration work
 ```
+
+Add additional maintainers or owners here as the project team is formalized.
 
 ---
 
